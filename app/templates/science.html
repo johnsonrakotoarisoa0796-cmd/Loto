@@ -3,6 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101827" id="theme-color-meta">
+  <script>
+    (() => {
+      try {
+        const saved = localStorage.getItem("loto-lab-theme") || "auto";
+        const preference = ["auto", "light", "dark"].includes(saved) ? saved : "auto";
+        const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.dataset.themePreference = preference;
+        document.documentElement.dataset.theme = preference === "auto" ? (dark ? "dark" : "light") : preference;
+      } catch (_) {
+        document.documentElement.dataset.themePreference = "auto";
+        document.documentElement.dataset.theme = "light";
+      }
+    })();
+  </script>
   <meta name="description" content="Audit mathématique du loto 5/35 : fréquences, dépendances, anomalies et validation hors échantillon.">
   <title>Loto Lab · Audit scientifique</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10,13 +25,22 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/science.css">
+  <script src="/static/theme.js" defer></script>
   <script src="/static/science.js" defer></script>
 </head>
 <body class="science-body">
   <main class="science-shell">
     <header class="science-topbar">
       <a class="science-brand" href="/"><span class="brand-mark small">35</span><span><strong>loto<span class="brand-accent">.</span>lab</strong><small>SCIENTIFIC AUDIT</small></span></a>
-      <div class="science-actions"><span class="science-live"><i></i> SURVEILLANCE STATISTIQUE</span><a class="btn btn-secondary btn-sm" href="/">← Retour au tableau de bord</a><button class="btn btn-primary btn-sm" id="science-refresh">↻ Relancer l'audit</button></div>
+      <div class="science-actions"><span class="science-live"><i></i> SURVEILLANCE STATISTIQUE</span>
+        <label class="theme-control" title="Choisir l'apparence">
+          <span class="theme-control-icon" aria-hidden="true">◐</span>
+          <select id="theme-select" aria-label="Choisir l'apparence de l'application">
+            <option value="auto">Automatique</option>
+            <option value="light">Clair</option>
+            <option value="dark">Sombre</option>
+          </select>
+        </label><a class="btn btn-secondary btn-sm" href="/">← Retour au tableau de bord</a><button class="btn btn-primary btn-sm" id="science-refresh">↻ Relancer l'audit</button></div>
     </header>
 
     <section class="science-heading">

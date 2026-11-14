@@ -48,7 +48,12 @@
     const allowed = ["overview", "history", "analysis", "prediction"];
     if (!allowed.includes(view)) return;
     $$(".page").forEach((page) => page.classList.toggle("active", page.id === `view-${view}`));
-    $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
+    $$(".nav-item").forEach((button) => {
+      const active = button.dataset.view === view;
+      button.classList.toggle("active", active);
+      if (active) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    });
     const labels = { overview: "Vue d'ensemble", history: "Historique", analysis: "Analyses statistiques", prediction: "Laboratoire de scores" };
     $("#page-crumb").textContent = labels[view];
     history.replaceState(null, "", `#${view}`);

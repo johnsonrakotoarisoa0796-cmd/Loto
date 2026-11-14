@@ -5,3 +5,18 @@ __pycache__/
 .env
 loto.db
 .DS_Store
+
+# Local rollback copies created by the safe updater
+_backups/
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+_backups/
+*.bak

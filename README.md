@@ -1,6 +1,6 @@
 # Loto Lab — analyse du Loto 5/35
 
-Application web en français pour enregistrer les tirages 5/35 et suivre les fréquences, répétitions, écarts, paires et scores exploratoires. L'interface est responsive (ordinateur et mobile). L'application ne prétend pas prédire un tirage aléatoire ni garantir un gain.
+Application web en français pour enregistrer les tirages 5/35 et suivre les fréquences, répétitions, écarts, paires, scores exploratoires et audits statistiques. L'interface est responsive (ordinateur, tablette et mobile) et propose trois apparences : automatique, claire et sombre. L'application ne prétend pas prédire un tirage aléatoire ni garantir un gain.
 
 ## Fonctions
 
@@ -8,7 +8,9 @@ Application web en français pour enregistrer les tirages 5/35 et suivre les fr�
 - Import CSV et export CSV de tout l'historique.
 - Tableau de bord : volume de données, fréquences, dernier résultat et répétitions entre dates calendaires consécutives.
 - Analyses : fréquences des 35 numéros, retours au tirage enregistré suivant, paires récurrentes et distribution des numéros communs.
-- Scores exploratoires avec lissage bayésien vers la référence théorique 1/7, plus deux combinaisons alternatives.
+- Scores exploratoires avec un a priori bayésien de 70 tirages vers la référence théorique 1/7 et une demi-vie de récence de 40 tirages, plus deux combinaisons alternatives.
+- Audit scientifique : tests exacts des 35 fréquences et 595 paires, contrôle Holm-Bonferroni des comparaisons multiples, dépendances aux retards 1 à 5 et validation chronologique hors échantillon.
+- Thème Automatique / Clair / Sombre, mémorisé dans le navigateur et synchronisé entre la connexion, le tableau de bord et l’audit scientifique.
 - Enregistrement horodaté des pronostics et évaluation automatique contre le premier tirage suivant.
 - Backtest chronologique : chaque prédiction n'utilise que les tirages antérieurs.
 - Protection par mot de passe activée dès que `APP_PASSWORD` est défini ; cookies de session signés et protection CSRF des actions API.
@@ -37,7 +39,7 @@ $env:SECRET_KEY = "une-cle-longue-et-aleatoire"
 uvicorn app.main:app --reload
 ```
 
-Ouvre ensuite `http://127.0.0.1:8000`.
+Ouvre ensuite `http://127.0.0.1:8000`. Le sélecteur **Apparence** en haut de l’écran permet de choisir Automatique, Clair ou Sombre ; le choix est conservé dans ce navigateur. L’audit scientifique est disponible à `/science`.
 
 Pour un essai local sans écran de connexion, laisse `APP_PASSWORD` vide. Ne fais pas cela pour une instance publique.
 
@@ -111,15 +113,19 @@ Le classement utilise les fréquences observées et la récence, mais les ramèn
 
 ```text
 .
-├── analysis_engine.py       # Statistiques et classement exploratoire
+├── analysis_engine.py       # Statistiques descriptives et classement exploratoire
+├── scientific_engine.py     # Audit scientifique et validation hors échantillon
 ├── app/
 │   ├── database.py          # SQLAlchemy / SQLite / PostgreSQL
 │   ├── main.py              # API FastAPI, import/export, authentification
 │   ├── templates/           # Interface HTML
-│   └── static/              # CSS et JavaScript
-├── tests/
+│   └── static/              # CSS, JavaScript et thème partagé
+│       └── theme.js         # Apparence Auto / Clair / Sombre
+├── tests/                   # Tests statistiques et tests de l’audit
 ├── render.yaml
 ├── requirements.txt
+├── INSTALLER-LOTO-LAB-PRO.ps1
+├── RESTAURER-LOTO-LAB.ps1
 └── sample_draws.csv
 ```
 

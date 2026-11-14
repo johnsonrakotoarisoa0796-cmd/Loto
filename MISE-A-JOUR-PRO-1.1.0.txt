@@ -1,0 +1,35 @@
+LOTO LAB 5/35 - PRO UPDATE 1.1.0
+================================
+
+IMPORTANT: EXTRACT THE ZIP TO A TEMPORARY FOLDER, NOT INTO THE LIVE PROJECT.
+The installer checks this and stops safely if source and target are the same folder.
+
+INSTALLATION ON WINDOWS
+1. Stop LOTO LAB with Ctrl+C in its server window.
+2. Extract the ZIP to a separate folder, for example:
+     E:\LOTO\_update_loto_lab_1_1_0
+   The extracted package should contain:
+     E:\LOTO\_update_loto_lab_1_1_0\Loto-Lab-5-35\INSTALLER-LOTO-LAB-PRO.ps1
+3. Open PowerShell and run:
+     Set-ExecutionPolicy -Scope Process Bypass
+     & "E:\LOTO\_update_loto_lab_1_1_0\Loto-Lab-5-35\INSTALLER-LOTO-LAB-PRO.ps1" -DossierProjet "E:\LOTO\Loto-Lab-5-35"
+   Adjust both paths if needed.
+4. The installer backs up every file it replaces under:
+     E:\LOTO\Loto-Lab-5-35\_backups\loto-lab-1.1.0-<date>
+5. Restart DEMARRER-LOTO-LAB.bat.
+6. Choose Automatic, Light, or Dark in the Appearance selector.
+7. Open /science for the scientific audit.
+
+DATA AND SAFETY
+- The installer does not modify loto.db, .env, passwords, or secret keys.
+- Do not delete loto.db; it contains your local draw history.
+- The theme preference is stored in the browser, not in the database.
+- To restore the latest backup, stop the server and run from the project folder:
+     .\RESTAURER-LOTO-LAB.ps1 -DossierProjet "E:\LOTO\Loto-Lab-5-35"
+
+VERIFICATION
+From the project folder:
+     python -m pytest tests -q
+
+The scientific rankings remain exploratory. No ranking can predict or guarantee
+winnings in a fair and independent lottery draw.

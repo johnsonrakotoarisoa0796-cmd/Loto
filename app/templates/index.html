@@ -3,7 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#101827">
+  <meta name="theme-color" content="#101827" id="theme-color-meta">
+  <script>
+    (() => {
+      try {
+        const saved = localStorage.getItem("loto-lab-theme") || "auto";
+        const preference = ["auto", "light", "dark"].includes(saved) ? saved : "auto";
+        const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.dataset.themePreference = preference;
+        document.documentElement.dataset.theme = preference === "auto" ? (dark ? "dark" : "light") : preference;
+      } catch (_) {
+        document.documentElement.dataset.themePreference = "auto";
+        document.documentElement.dataset.theme = "light";
+      }
+    })();
+  </script>
   <meta name="description" content="Suivi, statistiques et analyse historique du loto 5/35.">
   <title>Loto Lab · Analyse 5/35</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,6 +25,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
   <script>window.LOTO_CSRF = {{ csrf_token | tojson }};</script>
+  <script src="/static/theme.js" defer></script>
   <script src="/static/app.js" defer></script>
 </head>
 <body>
@@ -36,7 +51,7 @@
         {% if password_protected %}
         <form method="post" action="/logout" id="logout-form"><input type="hidden" name="csrf" value=""><button class="logout-btn" type="button" id="logout-button">↪ Déconnexion</button></form>
         {% endif %}
-        <div class="version">LOTO LAB <span>·</span> 1.0.0</div>
+        <div class="version">LOTO LAB <span>·</span> 1.1.0</div>
       </div>
     </aside>
 
@@ -44,7 +59,15 @@
       <header class="topbar">
         <div class="crumb"><span>LOTO 5/35</span><i> / </i><strong id="page-crumb">Vue d'ensemble</strong></div>
         <div class="top-actions">
-          <span class="sync-status"><span class="status-dot"></span>Base synchronisée</span>
+          <span class="sync-status"><span class="status-dot"></span>Données actualisées</span>
+          <label class="theme-control" title="Choisir l'apparence">
+            <span class="theme-control-icon" aria-hidden="true">◐</span>
+            <select id="theme-select" aria-label="Choisir l'apparence de l'application">
+              <option value="auto">Automatique</option>
+              <option value="light">Clair</option>
+              <option value="dark">Sombre</option>
+            </select>
+          </label>
           <button class="btn btn-primary btn-sm" id="open-add"><span class="plus">＋</span> Ajouter un tirage</button>
         </div>
       </header>

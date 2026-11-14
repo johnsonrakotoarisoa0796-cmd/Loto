@@ -1,22 +1,30 @@
-
 services:
   - type: web
     name: loto-analytics
     runtime: python
     plan: free
-    region: frankfurt
+    region: singapore
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
       - key: PYTHON_VERSION
-        value: "3.12.8"
+        value: 3.12.8
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: loto-analytics-db
+          property: connectionString
       - key: SECRET_KEY
         generateValue: true
       - key: APP_PASSWORD
         sync: false
       - key: COOKIE_SECURE
         value: "true"
+
+databases:
+  - name: loto-analytics-db
+    databaseName: loto_analytics
+    user: loto_user
+    plan: 0.1c-256mb
+    region: singapore

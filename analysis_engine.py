@@ -65,7 +65,7 @@ def _number_scores(draws: Sequence[dict]) -> list[dict]:
 
     rows = []
     for n in range(1, N_NUMBERS + 1):
-        # A 20-draw prior centered on the fair-lottery marginal rate prevents
+        # A 70-draw prior centered on the fair-lottery marginal rate prevents
         # small samples from producing exaggerated "hot number" estimates.
         overall = (counts[n] + PRIOR_DRAWS * BASE_RATE) / (total + PRIOR_DRAWS)
         recent = (weighted_hits[n] + PRIOR_DRAWS * BASE_RATE) / (weight_total + PRIOR_DRAWS)

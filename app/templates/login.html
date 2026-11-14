@@ -2,13 +2,35 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#101827">
+  <meta name="theme-color" content="#101827" id="theme-color-meta">
+  <script>
+    (() => {
+      try {
+        const saved = localStorage.getItem("loto-lab-theme") || "auto";
+        const preference = ["auto", "light", "dark"].includes(saved) ? saved : "auto";
+        const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.dataset.themePreference = preference;
+        document.documentElement.dataset.theme = preference === "auto" ? (dark ? "dark" : "light") : preference;
+      } catch (_) {
+        document.documentElement.dataset.themePreference = "auto";
+        document.documentElement.dataset.theme = "light";
+      }
+    })();
+  </script>
   <title>Connexion · Loto 5/35 Analytics</title>
   <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/theme.js" defer></script>
 </head>
 <body class="login-body">
   <main class="login-card">
-    <div class="brand-mark">35</div>
+    <div class="login-card-top"><div class="brand-mark">35</div>
+      <label class="theme-control" title="Choisir l'apparence">
+        <span class="theme-control-icon" aria-hidden="true">◐</span>
+        <select id="theme-select" aria-label="Choisir l'apparence de l'application">
+          <option value="auto">Automatique</option><option value="light">Clair</option><option value="dark">Sombre</option>
+        </select>
+      </label>
+    </div>
     <p class="eyebrow">ESPACE PRIVÉ</p>
     <h1>Bienvenue<br>dans Loto Lab.</h1>
     <p class="muted">Connecte-toi pour accéder à ton historique et à tes analyses 5/35.</p>
