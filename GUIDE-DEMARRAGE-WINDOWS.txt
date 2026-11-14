@@ -1,0 +1,42 @@
+LOTO LAB 5/35 - GUIDE DE DEMARRAGE WINDOWS
+==========================================
+
+1) TELECHARGER ET EXTRAIRE
+- Telechargez le fichier ZIP Loto-Lab-5-35.zip.
+- Dans l'Explorateur Windows, clic droit sur le ZIP > Extraire tout.
+- Ouvrez le dossier extrait "Loto-Lab-5-35".
+
+2) INSTALLER PYTHON (UNE SEULE FOIS)
+- Installez Python 3.11 ou plus recent : https://www.python.org/downloads/windows/
+- Pendant l'installation, cochez "Add Python to PATH".
+- Si Python est deja installe, passez a l'etape suivante.
+
+3) DEMARRER LE LOGICIEL
+- Double-cliquez sur DEMARRER-LOTO-LAB.bat.
+- Au premier lancement, le logiciel cree son environnement et installe ses dependances.
+- Une fenetre noire doit rester ouverte : ne la fermez pas pendant l'utilisation.
+- Ouvrez votre navigateur et allez sur http://127.0.0.1:8000
+
+4) DONNEES ET SAUVEGARDE
+- Les tirages sont conserves localement dans le fichier loto.db du dossier.
+- Ne supprimez pas ce fichier : il contient votre historique.
+- Utilisez l'export CSV dans le logiciel pour faire des sauvegardes regulieres.
+- Le logiciel insere les 7 tirages fournis au premier demarrage d'une base vide.
+
+5) ARRETER LE LOGICIEL
+- Revenez a la fenetre noire et appuyez sur Ctrl+C.
+- Vous pourrez relancer le logiciel en double-cliquant de nouveau sur le fichier BAT.
+
+6) DEPANNAGE
+- Si Windows indique que Python est introuvable, installez Python 3.11+ et cochez
+  "Add Python to PATH", puis fermez et rouvrez la session Windows.
+- Si le port 8000 est deja utilise, fermez l'autre application qui l'utilise.
+- Une connexion Internet est necessaire au premier lancement pour installer les dependances.
+
+IMPORTANT
+- Cette version locale utilise une base SQLite sur votre ordinateur.
+- Le fichier loto.db ne se synchronise pas automatiquement avec Render.
+- Avant de publier sur Internet, configurez un mot de passe et une cle secrete
+  propres a l'instance. Ne publiez pas le mode local sans protection.
+- Les analyses et classements sont exploratoires. Aucun modele ne peut garantir
+  un gain sur un tirage 5/35 equitable et independant.

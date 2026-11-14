@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101827">
+  <meta name="description" content="Suivi, statistiques et analyse historique du loto 5/35.">
+  <title>Loto Lab · Analyse 5/35</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <script>window.LOTO_CSRF = {{ csrf_token | tojson }};</script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="/" aria-label="Loto Lab accueil">
+        <span class="brand-mark small">35</span>
+        <span><strong>loto<span class="brand-accent">.</span>lab</strong><small>DATA STUDIO</small></span>
+      </a>
+      <div class="side-label">ESPACE DE TRAVAIL</div>
+      <nav class="side-nav" aria-label="Navigation principale">
+        <button class="nav-item active" data-view="overview"><span class="nav-icon">◫</span>Vue d'ensemble</button>
+        <button class="nav-item" data-view="history"><span class="nav-icon">▤</span>Historique <span class="nav-count" id="nav-draw-count">0</span></button>
+        <button class="nav-item" data-view="analysis"><span class="nav-icon">⌁</span>Analyses statistiques</button>
+        <button class="nav-item" data-view="prediction"><span class="nav-icon">✳</span>Laboratoire de scores</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="sidebar-note">
+          <span class="note-dot"></span>
+          <div><strong>Modèle transparent</strong><small>Pas de promesse de gain</small></div>
+        </div>
+        {% if password_protected %}
+        <form method="post" action="/logout" id="logout-form"><input type="hidden" name="csrf" value=""><button class="logout-btn" type="button" id="logout-button">↪ Déconnexion</button></form>
+        {% endif %}
+        <div class="version">LOTO LAB <span>·</span> 1.0.0</div>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div class="crumb"><span>LOTO 5/35</span><i> / </i><strong id="page-crumb">Vue d'ensemble</strong></div>
+        <div class="top-actions">
+          <span class="sync-status"><span class="status-dot"></span>Base synchronisée</span>
+          <button class="btn btn-primary btn-sm" id="open-add"><span class="plus">＋</span> Ajouter un tirage</button>
+        </div>
+      </header>
+
+      <section class="page active" id="view-overview">
+        <div class="page-heading">
+          <div><p class="eyebrow">TON CENTRE DE CONTRÔLE</p><h1>Vue d'ensemble<span class="period-dot">.</span></h1><p class="subheading">Observe les résultats, repère les répétitions et suis les tendances.</p></div>
+          <div class="heading-date" id="today-label">HISTORIQUE 5/35</div>
+        </div>
+        <div class="stat-grid">
+          <article class="stat-card"><div class="stat-top"><span>Tirages enregistrés</span><span class="stat-icon purple">▤</span></div><div class="stat-value" id="kpi-draws">—</div><div class="stat-foot">Dans ta base historique</div></article>
+          <article class="stat-card"><div class="stat-top"><span>Dernier tirage</span><span class="stat-icon cyan">◷</span></div><div class="stat-value date-value" id="kpi-latest">—</div><div class="stat-foot">Date la plus récente</div></article>
+          <article class="stat-card"><div class="stat-top"><span>Répétition au tirage suivant</span><span class="stat-icon orange">↻</span></div><div class="stat-value" id="kpi-repeat">—</div><div class="stat-foot" id="kpi-repeat-foot">Référence théorique : 56,1 %</div></article>
+          <article class="stat-card"><div class="stat-top"><span>Numéros déjà observés</span><span class="stat-icon green">◉</span></div><div class="stat-value" id="kpi-unique">—<small>/35</small></div><div class="stat-foot">Numéros présents dans l'historique</div></article>
+        </div>
+
+        <div class="content-grid overview-grid">
+          <article class="panel frequency-panel">
+            <div class="panel-header"><div><p class="eyebrow">RÉPARTITION</p><h2>Fréquence des numéros</h2><p class="panel-sub">Les 10 numéros les plus sortis dans ton historique.</p></div><button class="text-link" data-go="analysis">Voir les 35 <span>↗</span></button></div>
+            <div id="top-frequency" class="bar-list"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div></div>
+            <div class="chart-legend"><span><i class="legend-dot blue"></i>Occurrences</span><span id="frequency-baseline">—</span></div>
+          </article>
+          <article class="panel latest-panel">
+            <div class="panel-header"><div><p class="eyebrow">DERNIÈRES DONNÉES</p><h2>Tirages récents</h2><p class="panel-sub">Les 5 dernières dates enregistrées.</p></div><button class="icon-button" data-go="history" aria-label="Voir historique">↗</button></div>
+            <div id="recent-draws" class="recent-list"><div class="empty-state">Chargement des tirages…</div></div>
+          </article>
+        </div>
+
+        <div class="content-grid lower-grid">
+          <article class="panel repeat-panel">
+            <div class="panel-header"><div><p class="eyebrow">RÉPÉTITIONS</p><h2>Un tirage au suivant</h2><p class="panel-sub">Comparaison des jours calendaires consécutifs.</p></div><span class="pill pill-neutral">5/35</span></div>
+            <div class="repeat-summary"><div><strong id="repeat-count">—</strong><span>transitions avec répétition</span></div><div class="repeat-progress"><div class="progress-track"><span id="repeat-progress-fill"></span></div><div class="progress-labels"><span id="repeat-observed-label">Observé : —</span><span>Théorie : 56,1 %</span></div></div></div>
+            <div id="repeat-timeline" class="repeat-timeline"></div><p class="micro-note" id="repeat-statistical-test"></p>
+          </article>
+          <article class="panel insight-panel"><p class="eyebrow">À GARDER EN TÊTE</p><div class="insight-mark">✳</div><h2>Le hasard n'a pas de mémoire.</h2><p>Dans un tirage équitable, chaque numéro garde une chance de <strong>1 sur 7</strong> à chaque nouvelle sortie. Une répétition est normale ; l'historique ne garantit pas le prochain résultat.</p><button class="text-link" data-go="analysis">Comprendre les statistiques <span>↗</span></button></article>
+        </div>
+        <div class="data-note"><span>ⓘ</span><span>Les données de départ correspondent aux 7 tirages que tu as fournis du 08/11/2026 au 14/11/2026. Tu peux les modifier ou les supprimer.</span></div>
+      </section>
+
+      <section class="page" id="view-history">
+        <div class="page-heading"><div><p class="eyebrow">BASE DE DONNÉES</p><h1>Historique<span class="period-dot">.</span></h1><p class="subheading">Ajoute chaque résultat, corrige une saisie ou importe un fichier CSV.</p></div><div class="heading-actions"><button class="btn btn-secondary" id="import-trigger">↑ Importer CSV</button><a class="btn btn-secondary" href="/api/export.csv">↓ Exporter CSV</a><button class="btn btn-primary" id="history-add">＋ Nouveau tirage</button><input type="file" id="csv-file" accept=".csv,text/csv" hidden></div></div>
+        <div class="panel table-panel">
+          <div class="table-toolbar"><div class="table-title"><strong id="history-total">0 tirage</strong><span>·</span><span>Tri du plus récent au plus ancien</span></div><label class="search-box"><span>⌕</span><input id="history-search" type="search" placeholder="Rechercher une date ou un numéro…"></label></div>
+          <div class="table-scroll"><table><thead><tr><th>DATE DU TIRAGE</th><th>NUMÉROS SORTIS</th><th>SOURCE</th><th>NOTES</th><th class="align-right">ACTIONS</th></tr></thead><tbody id="history-body"><tr><td colspan="5" class="empty-cell">Chargement…</td></tr></tbody></table></div>
+          <div class="table-footer"><span id="history-showing">—</span><span>Les dates sont uniques : un seul tirage par jour.</span></div>
+        </div>
+        <div class="data-note"><span>⇧</span><span>Format CSV accepté : <code>date,n1,n2,n3,n4,n5,source,notes</code>. Les doublons identiques sont ignorés ; les conflits sont signalés.</span></div>
+      </section>
+
+      <section class="page" id="view-analysis">
+        <div class="page-heading"><div><p class="eyebrow">EXPLORATION DES DONNÉES</p><h1>Analyses statistiques<span class="period-dot">.</span></h1><p class="subheading">Fréquences, retours, écarts et associations sur les tirages enregistrés.</p></div><span class="pill pill-neutral" id="analysis-sample">ÉCHANTILLON : —</span></div>
+        <div class="analysis-callout"><span class="callout-icon">ⓘ</span><div><strong>Analyse descriptive, pas preuve de biais.</strong><p>Les fréquences passées décrivent l'historique. Pour détecter un écart fiable, il faut beaucoup plus de tirages et un protocole défini avant l'observation.</p></div></div>
+        <div class="analysis-grid">
+          <article class="panel wide-panel"><div class="panel-header"><div><p class="eyebrow">1 À 35</p><h2>Carte complète des fréquences</h2><p class="panel-sub">Écart = nombre de tirages depuis la dernière apparition ; moyenne attendue : 1/7 par tirage.</p></div></div><div id="all-frequency" class="heat-grid"></div><div class="heat-legend"><span><i class="legend-swatch low"></i>Moins fréquent</span><span><i class="legend-swatch mid"></i>Proche de la moyenne</span><span><i class="legend-swatch high"></i>Plus fréquent</span></div></article>
+          <article class="panel"><div class="panel-header"><div><p class="eyebrow">RENDEZ-VOUS</p><h2>Retour du même numéro</h2><p class="panel-sub">Par numéro, parmi les cas où il était présent au tirage précédent.</p></div></div><div id="reappearance-list" class="compact-list"></div><p class="micro-note">Référence théorique par numéro : 14,29 % au tirage suivant, sous indépendance.</p></article>
+          <article class="panel"><div class="panel-header"><div><p class="eyebrow">ASSOCIATIONS</p><h2>Paires les plus fréquentes</h2><p class="panel-sub">Deux numéros apparus ensemble dans le même tirage.</p></div></div><div id="pairs-list" class="pair-list"></div></article>
+          <article class="panel"><div class="panel-header"><div><p class="eyebrow">TRANSITIONS</p><h2>Nombre de communs</h2><p class="panel-sub">Entre deux tirages enregistrés successifs.</p></div></div><div id="overlap-chart" class="overlap-chart"></div><p class="micro-note">Le nombre moyen théorique de numéros communs est 0,714 par paire de tirages indépendants.</p></article>
+        </div>
+        <article class="panel transition-panel"><div class="panel-header"><div><p class="eyebrow">SÉQUENCE CHRONOLOGIQUE</p><h2>Ce qui s'est répété</h2><p class="panel-sub">Comparaison des derniers tirages enregistrés.</p></div></div><div class="table-scroll"><table><thead><tr><th>DU</th><th>AU</th><th>NUMÉROS COMMUNS</th><th>INTERVALLE</th></tr></thead><tbody id="transition-body"></tbody></table></div></article>
+      </section>
+
+      <section class="page" id="view-prediction">
+        <div class="page-heading"><div><p class="eyebrow">LABORATOIRE EXPÉRIMENTAL</p><h1>Scores & tendances<span class="period-dot">.</span></h1><p class="subheading">Un classement exploratoire construit uniquement à partir des tirages enregistrés.</p></div><span class="pill pill-warning">EXPÉRIMENTAL</span></div>
+        <div class="prediction-banner"><div class="prediction-orbit">✳</div><div><span class="eyebrow">COMBINAISON CLASSÉE PAR LE MODÈLE</span><h2 id="prediction-combo">—</h2><p>Classement statistique lissé — pas une prédiction certaine ni une amélioration démontrée des chances.</p></div><div class="prediction-method"><span>MÉTHODE</span><strong>Historique + récence</strong><small>Prior centré sur 1/7</small><button class="btn btn-secondary btn-sm" id="save-prediction">＋ Enregistrer ce pronostic</button></div></div>
+        <div class="prediction-grid">
+          <article class="panel"><div class="panel-header"><div><p class="eyebrow">CLASSEMENT</p><h2>Top 15 des scores</h2><p class="panel-sub">Indice de classement lissé ; référence théorique : 14,29 % par numéro si le tirage est équitable.</p></div></div><div id="prediction-ranking" class="ranking-list"></div></article>
+          <article class="panel"><div class="panel-header"><div><p class="eyebrow">AUTRES COMBINAISONS</p><h2>Scénarios alternatifs</h2><p class="panel-sub">Variantes générées à partir des scores historiques.</p></div></div><div id="alternative-combos" class="alternative-list"></div><div class="model-caveat"><strong>À ne pas confondre</strong><p>Chaque combinaison de 5 numéros distincts a exactement la même probabilité théorique : 1 sur 324 632, si le tirage est uniforme.</p></div></article>
+        </div>
+        <article class="panel prediction-history-panel"><div class="panel-header"><div><p class="eyebrow">SUIVI RÉEL DES PRÉVISIONS</p><h2>Prévisions enregistrées</h2><p class="panel-sub">Chaque prévision enregistrée sera comparée au premier tirage ajouté après sa date de référence.</p></div><span class="pill pill-neutral" id="forecast-count">0 ENREGISTRÉE</span></div><div class="table-scroll"><table><thead><tr><th>CRÉÉE SUR LA BASE DU</th><th>NUMÉROS PROPOSÉS</th><th>TIRAGE SUIVANT</th><th>NUMÉROS RÉELS</th><th>TOUCHÉS</th></tr></thead><tbody id="forecast-history-body"><tr><td colspan="5" class="empty-cell">Aucune prévision enregistrée pour l'instant.</td></tr></tbody></table></div></article>
+        <article class="panel backtest-panel"><div class="panel-header"><div><p class="eyebrow">CONTRÔLE DU MODÈLE</p><h2>Test rétrospectif</h2><p class="panel-sub">Le modèle prédit chaque tirage uniquement avec les données antérieures.</p></div><span class="pill pill-neutral">SANS FUITE DE DONNÉES</span></div><div id="backtest-content" class="backtest-content"></div></article>
+        <div class="data-note"><span>⚑</span><span>Le classement sert à explorer les données. Il ne rend pas un numéro « dû » et ne doit pas guider une mise d'argent importante.</span></div>
+      </section>
+
+      <footer class="app-footer"><span>LOTO LAB · OUTIL D'ANALYSE PERSONNELLE</span><span>Les tirages aléatoires sont indépendants.</span></footer>
+    </main>
+  </div>
+
+  <dialog id="draw-dialog" class="modal">
+    <form id="draw-form" class="modal-card">
+      <div class="modal-heading"><div><p class="eyebrow">MISE À JOUR DE L'HISTORIQUE</p><h2 id="draw-dialog-title">Ajouter un tirage</h2></div><button type="button" class="icon-button" id="close-draw" aria-label="Fermer">×</button></div>
+      <input type="hidden" id="draw-id">
+      <label class="field-label" for="draw-date">Date du tirage</label><input id="draw-date" type="date" required>
+      <div class="field-label numbers-label">Les 5 numéros <span>Entre 1 et 35, sans doublon</span></div>
+      <div class="number-input-grid">{% for i in range(1, 6) %}<input class="number-input" type="number" min="1" max="35" inputmode="numeric" id="num-{{ i }}" placeholder="{{ '%02d'|format(i) }}" required>{% endfor %}</div>
+      <label class="field-label" for="draw-source">Source (facultatif)</label><input id="draw-source" type="text" maxlength="120" placeholder="Ex. Résultat officiel">
+      <label class="field-label" for="draw-notes">Notes (facultatif)</label><textarea id="draw-notes" rows="2" maxlength="500" placeholder="Commentaire sur le tirage…"></textarea>
+      <div class="form-error" id="draw-error" role="alert"></div>
+      <div class="modal-actions"><button type="button" class="btn btn-secondary" id="cancel-draw">Annuler</button><button type="submit" class="btn btn-primary" id="save-draw">Enregistrer le tirage</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

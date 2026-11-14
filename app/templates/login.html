@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101827">
+  <title>Connexion · Loto 5/35 Analytics</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-body">
+  <main class="login-card">
+    <div class="brand-mark">35</div>
+    <p class="eyebrow">ESPACE PRIVÉ</p>
+    <h1>Bienvenue<br>dans Loto Lab.</h1>
+    <p class="muted">Connecte-toi pour accéder à ton historique et à tes analyses 5/35.</p>
+    {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+    <form method="post" action="/login" class="login-form">
+      <label for="password">Mot de passe</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+      <button class="btn btn-primary btn-wide" type="submit">Ouvrir mon espace <span>↗</span></button>
+    </form>
+    <p class="tiny muted">Tes données restent dans la base associée à ton application.</p>
+  </main>
+</body>
+</html>
