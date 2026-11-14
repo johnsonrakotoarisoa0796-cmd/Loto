@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from analysis_engine import analyze_draws
+from scientific_engine import audit_draws
 from app.database import Base, Draw, PredictionRun, SessionLocal, engine
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -447,3 +448,20 @@ def export_csv(db: Session = Depends(get_db)):
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=loto-5-35-historique.csv"},
     )
+
+# --- LOTO LAB: scientific audit engine ---
+@app.get("/science", response_class=HTMLResponse)
+def science_page(request: Request):
+    if APP_PASSWORD and not request.session.get("authenticated"):
+        return RedirectResponse(url="/login", status_code=303)
+    request.session.setdefault("csrf_token", secrets.token_urlsafe(32))
+    return templates.TemplateResponse(request, "science.html", {
+        "csrf_token": request.session["csrf_token"],
+        "password_protected": bool(APP_PASSWORD),
+    })
+
+
+@app.get("/api/science", dependencies=[Depends(require_auth)])
+def get_scientific_audit(db: Session = Depends(get_db)):
+    return audit_draws(load_draws(db))
+# --- END LOTO LAB: scientific audit engine ---

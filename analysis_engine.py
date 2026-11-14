@@ -16,8 +16,8 @@ import random
 N_NUMBERS = 35
 PICK_COUNT = 5
 BASE_RATE = PICK_COUNT / N_NUMBERS
-PRIOR_DRAWS = 20.0
-RECENCY_HALF_LIFE = 20.0
+PRIOR_DRAWS = 70.0
+RECENCY_HALF_LIFE = 40.0
 
 
 def _clean_draws(draws: Iterable[dict]) -> list[dict]:
@@ -69,7 +69,7 @@ def _number_scores(draws: Sequence[dict]) -> list[dict]:
         # small samples from producing exaggerated "hot number" estimates.
         overall = (counts[n] + PRIOR_DRAWS * BASE_RATE) / (total + PRIOR_DRAWS)
         recent = (weighted_hits[n] + PRIOR_DRAWS * BASE_RATE) / (weight_total + PRIOR_DRAWS)
-        score = 0.65 * overall + 0.35 * recent
+        score = 0.70 * overall + 0.30 * recent
         last_index = next((i for i in range(total - 1, -1, -1) if n in draws[i]["numbers"]), None)
         gap = None if last_index is None else total - 1 - last_index
         rows.append({
@@ -88,7 +88,7 @@ def _top_numbers(draws: Sequence[dict]) -> list[int]:
     return [row["number"] for row in sorted(scores, key=lambda x: (-x["score"], x["number"]))[:PICK_COUNT]]
 
 
-def _backtest(draws: Sequence[dict], min_training: int = 12) -> dict:
+def _backtest(draws: Sequence[dict], min_training: int = 60) -> dict:
     observations = []
     for i in range(min_training, len(draws)):
         predicted = set(_top_numbers(draws[:i]))

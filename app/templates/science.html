@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Audit mathématique du loto 5/35 : fréquences, dépendances, anomalies et validation hors échantillon.">
+  <title>Loto Lab · Audit scientifique</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/science.css">
+  <script src="/static/science.js" defer></script>
+</head>
+<body class="science-body">
+  <main class="science-shell">
+    <header class="science-topbar">
+      <a class="science-brand" href="/"><span class="brand-mark small">35</span><span><strong>loto<span class="brand-accent">.</span>lab</strong><small>SCIENTIFIC AUDIT</small></span></a>
+      <div class="science-actions"><span class="science-live"><i></i> SURVEILLANCE STATISTIQUE</span><a class="btn btn-secondary btn-sm" href="/">← Retour au tableau de bord</a><button class="btn btn-primary btn-sm" id="science-refresh">↻ Relancer l'audit</button></div>
+    </header>
+
+    <section class="science-heading">
+      <p class="eyebrow">MATHÉMATIQUES · STATISTIQUE · VALIDATION</p>
+      <h1>Laboratoire scientifique<span>.</span></h1>
+      <p>Un moteur d'audit qui cherche des écarts mesurables, corrige les faux positifs et teste ses classements sur des tirages qu'il n'a pas vus.</p>
+    </section>
+
+    <section id="science-status" class="science-status status-insufficient">
+      <div class="status-symbol">◎</div>
+      <div><span class="eyebrow">DIAGNOSTIC ACTUEL</span><h2 id="science-status-title">Analyse en cours…</h2><p id="science-status-text">Chargement des données et des tests statistiques.</p></div>
+      <span class="status-badge" id="science-status-badge">INITIALISATION</span>
+    </section>
+
+    <section class="science-kpis">
+      <article class="science-kpi"><span>Historique analysé</span><strong id="science-draw-count">—</strong><small id="science-date-range">Période indisponible</small></article>
+      <article class="science-kpi"><span>Tests simultanés</span><strong id="science-test-count">—</strong><small>35 numéros · 595 paires · retards 1 à 5</small></article>
+      <article class="science-kpi"><span>Anomalies corrigées</span><strong id="science-signal-count">—</strong><small>Seuil global : 5 % après Holm</small></article>
+      <article class="science-kpi"><span>Signal prédictif candidat</span><strong id="science-edge">NON</strong><small id="science-edge-note">Aucun avantage démontré</small></article>
+    </section>
+
+    <section class="science-panel intro-panel">
+      <div class="panel-icon">∑</div>
+      <div><strong>Le principe : d'abord réfuter le hasard, ensuite seulement chercher un signal.</strong><p>Le moteur ne récompense pas automatiquement les numéros « chauds ». Il teste 35 fréquences et 595 cooccurrences, applique une correction globale des comparaisons multiples, puis contrôle le modèle sur des tirages futurs dans l'ordre chronologique.</p></div>
+    </section>
+
+    <section class="science-grid">
+      <article class="science-panel science-wide">
+        <div class="science-panel-heading"><div><p class="eyebrow">FAMILLE 01 · 35 HYPOTHÈSES</p><h2>Biais par numéro</h2><p>Probabilité théorique individuelle : 1/7 par tirage. Les p-values ajustées tiennent compte des 35 numéros et des autres tests.</p></div><span class="science-tag">BINOMIALE EXACTE</span></div>
+        <div class="science-table-wrap"><table><thead><tr><th>N°</th><th>OBSERVÉ</th><th>ATTENDU</th><th>ÉCART</th><th>P BRUTE</th><th>P AJUSTÉE</th><th>LECTURE</th></tr></thead><tbody id="science-number-rows"><tr><td colspan="7" class="science-empty">Chargement…</td></tr></tbody></table></div>
+      </article>
+
+      <article class="science-panel science-wide">
+        <div class="science-panel-heading"><div><p class="eyebrow">FAMILLE 02 · 595 HYPOTHÈSES</p><h2>Paires de numéros</h2><p>Une paire donnée doit apparaître ensemble avec une probabilité de 2/119 par tirage, sous le modèle uniforme.</p></div><span class="science-tag">HOLM-BONFERRONI</span></div>
+        <div class="science-table-wrap"><table><thead><tr><th>PAIRE</th><th>OBSERVÉ</th><th>ATTENDU</th><th>P BRUTE</th><th>P AJUSTÉE</th><th>LECTURE</th></tr></thead><tbody id="science-pair-rows"><tr><td colspan="6" class="science-empty">Chargement…</td></tr></tbody></table></div>
+        <p class="science-footnote">Les 595 paires sont toutes testées. Le tableau présente les 20 résultats les plus inhabituels, même lorsqu'ils ne franchissent pas le seuil statistique.</p>
+      </article>
+
+      <article class="science-panel">
+        <div class="science-panel-heading"><div><p class="eyebrow">FAMILLE 03 · DÉPENDANCE</p><h2>Répétitions aux retards</h2><p>Comparaison de tirages séparés par 1 à 5 enregistrements, avec paires disjointes.</p></div></div>
+        <div id="science-lag-rows" class="science-lag-list"><div class="science-empty">Chargement…</div></div>
+        <p class="science-footnote">Référence : moyenne attendue de 0,714 numéro commun entre deux tirages indépendants.</p>
+      </article>
+
+      <article class="science-panel">
+        <div class="science-panel-heading"><div><p class="eyebrow">FAMILLE 04 · PRÉDICTION</p><h2>Test hors échantillon</h2><p>Le modèle n'utilise jamais les résultats futurs pour construire une prévision passée.</p></div></div>
+        <div id="science-model-validation" class="science-model-box"><div class="science-empty">Chargement…</div></div>
+      </article>
+    </section>
+
+    <section class="science-panel method-panel">
+      <div class="science-panel-heading"><div><p class="eyebrow">PROTOCOLE FIXE</p><h2>Comment le moteur évite le surapprentissage</h2></div><span class="science-tag">PARAMÈTRES NON OPTIMISÉS</span></div>
+      <div class="method-grid">
+        <div><b>01 · Référence physique</b><p>Chaque tirage est modélisé comme un échantillon uniforme de cinq numéros distincts parmi 35, sans remise.</p></div>
+        <div><b>02 · Correction des faux positifs</b><p>La correction de Holm-Bonferroni contrôle le risque de faux signal sur toute la famille de tests, même si les tests sont dépendants.</p></div>
+        <div><b>03 · Apprentissage prudent</b><p>Le classement utilise un a priori bayésien fortement lissé et une pondération récente fixe. Aucun réglage n'est optimisé sur les résultats du test.</p></div>
+        <div><b>04 · Validation temporelle</b><p>Chaque prévision est produite avec le passé uniquement. Un éventuel avantage doit apparaître dans deux périodes de test séparées.</p></div>
+      </div>
+    </section>
+
+    <section class="science-panel limitation-panel"><strong>Ce que ce laboratoire peut et ne peut pas faire</strong><p>Une anomalie statistique est un écart à examiner, pas une preuve de manipulation. Une absence d'anomalie n'est pas une preuve parfaite d'aléa. Si le mécanisme est équitable et indépendant, les numéros passés ne changent pas les probabilités du prochain tirage. Le moteur peut détecter une irrégularité reproductible ; il ne peut pas garantir un gain ni justifier de miser davantage.</p></section>
+    <footer class="science-footer"><span>LOTO LAB · SCIENTIFIC AUDIT ENGINE</span><span>Analyses recalculées à chaque mise à jour de l'historique.</span></footer>
+  </main>
+  <div id="science-toast" class="science-toast" role="status" aria-live="polite"></div>
+</body>
+</html>
