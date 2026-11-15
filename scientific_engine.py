@@ -18,8 +18,8 @@ PICK_COUNT = 5
 P_NUMBER = PICK_COUNT / N_NUMBERS
 P_PAIR = comb(PICK_COUNT, 2) / comb(N_NUMBERS, 2)  # 2/119
 EXPECTED_OVERLAP = PICK_COUNT * PICK_COUNT / N_NUMBERS
-PRIOR_STRENGTH = 70.0
-RECENCY_HALF_LIFE = 40.0
+PRIOR_STRENGTH = 24.0
+RECENCY_HALF_LIFE = 12.0
 MIN_TRAINING_DRAWS = 60
 MIN_CONFIRMATION_FORECASTS = 40
 
@@ -163,7 +163,7 @@ def _scores_from_state(counts: Counter, weighted_counts: Counter, total: int, we
     for number in range(1, N_NUMBERS + 1):
         overall = (counts[number] + prior_hits) / (total + PRIOR_STRENGTH) if total else P_NUMBER
         recent = (weighted_counts[number] + prior_hits) / (weight_total + PRIOR_STRENGTH) if total else P_NUMBER
-        score = 0.70 * overall + 0.30 * recent
+        score = 0.55 * overall + 0.45 * recent
         rows.append({"number": number, "score": score, "count": counts[number]})
     return sorted(rows, key=lambda row: (-row["score"], row["number"]))
 
@@ -426,7 +426,7 @@ def audit_draws(raw_draws: Iterable[dict]) -> dict:
             "Tests de dépendance aux retards 1 à 5 sur des paires de tirages disjointes, sous loi hypergéométrique.",
             "Correction globale de Holm-Bonferroni pour limiter les faux positifs dus aux nombreux tests, y compris ceux de validation prédictive.",
             "Prévisions testées chronologiquement : chaque résultat futur est comparé à un classement construit uniquement avec le passé.",
-            "Le modèle de classement utilise un lissage bayésien fort, des paramètres fixes et aucune optimisation sur le jeu de test.",
+            "Le modèle de classement utilise un lissage bayésien modéré, des paramètres fixes et aucune optimisation sur le jeu de test.",
         ],
         "limitations": [
             "Un résultat statistiquement inhabituel n'identifie pas sa cause : erreur de saisie, changement de machine, procédure ou hasard peuvent produire un écart.",

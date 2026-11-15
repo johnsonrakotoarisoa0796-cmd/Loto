@@ -143,7 +143,12 @@
     const max = Math.max(...top.map((x) => x.score));
     $("#prediction-ranking").innerHTML = top.map((row, index) => {
       const width = max === min ? 50 : 16 + (row.score - min) / (max - min) * 84;
-      return `<div class="ranking-row"><span class="rank-index">${String(index + 1).padStart(2, "0")}</span><span class="bar-number">${String(row.number).padStart(2, "0")}</span><div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div><span class="score">${pct(row.score, 2)}</span></div>`;
+      const movement = row.trend_delta == null
+        ? "attente"
+        : `${row.trend_delta >= 0 ? "+" : ""}${(row.trend_delta * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} pt`;
+      const arrow = row.trend_direction === "up" ? "↗" : row.trend_direction === "down" ? "↘" : row.trend_direction === "stable" ? "→" : "·";
+      const provisional = row.trend_reliability === "provisional" ? " · provisoire" : "";
+      return `<div class="ranking-row"><span class="rank-index">${String(index + 1).padStart(2, "0")}</span><span class="bar-number">${String(row.number).padStart(2, "0")}</span><div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div><span class="score">${pct(row.score, 2)}</span><span class="trend-value trend-${row.trend_direction}" title="${escapeHtml(row.trend_basis || "")} ">${arrow} ${movement}${provisional}</span></div>`;
     }).join("");
     $("#alternative-combos").innerHTML = prediction.alternatives.map((combo, index) => `
       <div class="alternative-row"><span>SCÉNARIO ${index + 2}</span><div class="ball-row">${combo.map((n) => ball(n)).join("")}</div></div>`).join("");

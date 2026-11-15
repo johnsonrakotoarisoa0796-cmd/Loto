@@ -86,3 +86,16 @@
 .login-card-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .login-card-top .brand-mark{margin-bottom:0}
 .login-card-top{margin-bottom:25px}
+
+/* LOTO LAB 1.1.1 — visible short-term trend beside the ranking score */
+.ranking-row{grid-template-columns:25px 27px minmax(50px,1fr) 52px 100px}
+.trend-value{font:8px 'DM Mono',monospace;text-align:right;white-space:nowrap;color:#778399}
+.trend-up{color:#168765}
+.trend-down{color:#c06a4d}
+.trend-stable{color:#778399}
+.trend-insufficient{color:#9aa3b2}
+:root[data-theme="dark"] .trend-stable,:root[data-theme="dark"] .trend-insufficient{color:#9aabc2}
+:root[data-theme="dark"] .trend-up{color:#6bd3ad}
+:root[data-theme="dark"] .trend-down{color:#ffad8d}
+@media(max-width:560px){.ranking-row{grid-template-columns:21px 25px minmax(30px,1fr) 45px 86px;gap:6px}.trend-value{font-size:7px}}
+@media(max-width:380px){.ranking-row{grid-template-columns:19px 23px minmax(25px,1fr) 42px 76px;gap:4px}.trend-value{font-size:6px}}
