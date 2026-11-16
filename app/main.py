@@ -28,7 +28,7 @@ BASE_DIR = Path(__file__).resolve().parent
 APP_PASSWORD = os.getenv("APP_PASSWORD", "")
 SECRET_KEY = os.getenv("SECRET_KEY", "development-secret-change-before-deploy")
 
-app = FastAPI(title="Loto 5/35 Analytics", version="1.1.2")
+app = FastAPI(title="Loto 5/35 Analytics", version="1.1.3")
 app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,

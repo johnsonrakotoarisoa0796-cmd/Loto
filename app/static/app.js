@@ -144,14 +144,14 @@
     let trendLabel = "tendance disponible à partir de 3 tirages";
     if (summary.draw_count >= 20) trendLabel = `${trendWindow} derniers vs ${trendWindow} précédents`;
     else if (summary.draw_count >= 10) trendLabel = `${trendWindow} derniers vs ${trendWindow} précédents · signal provisoire`;
-    else if (summary.draw_count >= 3) trendLabel = `signal provisoire vs référence théorique · 14,29 %`;
+    else if (summary.draw_count >= 3) trendLabel = `historique court · direction disponible après 10 tirages`;
     $("#ranking-status").textContent = `Recalcul automatique · ${summary.draw_count} tirage(s) · dernier résultat : ${latestDate} · ${trendLabel}`;
     const min = Math.min(...top.map((x) => x.score));
     const max = Math.max(...top.map((x) => x.score));
     $("#prediction-ranking").innerHTML = top.map((row, index) => {
       const width = max === min ? 50 : 16 + (row.score - min) / (max - min) * 84;
       const movement = row.trend_delta == null
-        ? "attente"
+        ? `${row.recent_window_hits ?? 0}/${row.trend_window || 0} récents`
         : `${row.trend_delta >= 0 ? "+" : ""}${(row.trend_delta * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} pt`;
       const arrow = row.trend_direction === "up" ? "↗" : row.trend_direction === "down" ? "↘" : row.trend_direction === "stable" ? "→" : "·";
       const provisional = row.trend_reliability === "provisional" ? " · provisoire" : "";

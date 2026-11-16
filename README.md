@@ -8,7 +8,7 @@ Application web en français pour enregistrer les tirages 5/35 et suivre les fr�
 - Import CSV et export CSV de tout l'historique.
 - Tableau de bord : volume de données, fréquences, dernier résultat et répétitions entre dates calendaires consécutives.
 - Analyses : fréquences des 35 numéros, retours au tirage enregistré suivant, paires récurrentes et distribution des numéros communs.
-- Scores exploratoires recalculés après chaque changement de l’historique, avec un a priori historique de 12 tirages, une demi-vie récente de 4 tirages et un poids récent de 60 % ; la tendance compare les 5 derniers tirages aux 5 précédents dès 10 résultats, et reste provisoire avant 20 résultats.
+- Scores exploratoires recalculés après chaque changement de l’historique ; la tendance ne donne pas de direction avant 10 tirages, compare ensuite deux fenêtres de 5 tirages et utilise un seuil de 20 points pour limiter les faux signaux sur de petits échantillons.
 - Audit scientifique : tests exacts des 35 fréquences et 595 paires, contrôle Holm-Bonferroni des comparaisons multiples, dépendances aux retards 1 à 5 et validation chronologique hors échantillon.
 - Thème Automatique / Clair / Sombre, mémorisé dans le navigateur et synchronisé entre la connexion, le tableau de bord et l’audit scientifique.
 - Enregistrement horodaté des pronostics et évaluation automatique contre le premier tirage suivant.

@@ -26,7 +26,7 @@
   <link rel="stylesheet" href="/static/style.css">
   <script>window.LOTO_CSRF = {{ csrf_token | tojson }};</script>
   <script src="/static/theme.js" defer></script>
-  <script src="/static/app.js" defer></script>
+  <script src="/static/app.js?v=1.1.3" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -51,7 +51,7 @@
         {% if password_protected %}
         <form method="post" action="/logout" id="logout-form"><input type="hidden" name="csrf" value=""><button class="logout-btn" type="button" id="logout-button">↪ Déconnexion</button></form>
         {% endif %}
-        <div class="version">LOTO LAB <span>·</span> 1.1.2</div>
+        <div class="version">LOTO LAB <span>·</span> 1.1.3</div>
       </div>
     </aside>
 

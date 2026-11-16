@@ -21,7 +21,7 @@ RECENT_PRIOR_DRAWS = 6.0
 RECENCY_HALF_LIFE = 4.0
 RECENT_SCORE_WEIGHT = 0.60
 TREND_WINDOW = 5
-TREND_THRESHOLD = 0.03
+TREND_THRESHOLD = 0.20
 
 
 def _clean_draws(draws: Iterable[dict]) -> list[dict]:
@@ -82,43 +82,48 @@ def _number_scores(draws: Sequence[dict]) -> list[dict]:
     rows = []
     window = min(TREND_WINDOW, total)
     has_trend = window >= 3
+    has_comparison = total >= 2 * TREND_WINDOW
     for n in range(1, N_NUMBERS + 1):
         overall = (counts[n] + PRIOR_DRAWS * BASE_RATE) / (total + PRIOR_DRAWS)
         recent = (weighted_hits[n] + RECENT_PRIOR_DRAWS * BASE_RATE) / (weight_total + RECENT_PRIOR_DRAWS)
         score = (1.0 - RECENT_SCORE_WEIGHT) * overall + RECENT_SCORE_WEIGHT * recent
         last_index = next((i for i in range(total - 1, -1, -1) if n in draws[i]["numbers"]), None)
         gap = None if last_index is None else total - 1 - last_index
+        recent_window_hits = sum(n in d["numbers"] for d in draws[-window:]) if window else 0
+        recent_window_rate = recent_window_hits / window if window else BASE_RATE
 
-        if has_trend:
-            recent_window = draws[-window:]
-            recent_window_rate = sum(n in d["numbers"] for d in recent_window) / window
-            if total >= 2 * window:
-                previous_window = draws[-2 * window:-window]
-                previous_window_rate = sum(n in d["numbers"] for d in previous_window) / window
-                trend_delta = recent_window_rate - previous_window_rate
-                trend_basis = f"{window} derniers tirages comparés aux {window} précédents"
-                trend_reliability = "comparative" if total >= 20 else "provisional"
-            else:
-                previous_window_rate = None
-                trend_delta = recent_window_rate - BASE_RATE
-                trend_basis = (
-                    f"Signal provisoire : {window} derniers tirages comparés "
-                    "à la référence théorique de 14,29 %"
-                )
-                trend_reliability = "provisional"
-
-            if trend_delta > TREND_THRESHOLD:
+        if has_comparison:
+            previous_window = draws[-2 * TREND_WINDOW:-TREND_WINDOW]
+            previous_window_hits = sum(n in d["numbers"] for d in previous_window)
+            previous_window_rate = previous_window_hits / TREND_WINDOW
+            trend_delta = recent_window_rate - previous_window_rate
+            trend_basis = (
+                f"5 derniers : {recent_window_hits}/5 ; "
+                f"5 précédents : {previous_window_hits}/5"
+            )
+            trend_reliability = "comparative" if total >= 20 else "provisional"
+            if trend_delta >= TREND_THRESHOLD:
                 trend_direction = "up"
-            elif trend_delta < -TREND_THRESHOLD:
+            elif trend_delta <= -TREND_THRESHOLD:
                 trend_direction = "down"
             else:
                 trend_direction = "stable"
-        else:
-            recent_window_rate = sum(n in d["numbers"] for d in draws) / total
+        elif has_trend:
+            # With fewer than ten records, one appearance in five (20%) is
+            # not enough evidence to label a number as trending up or down.
             previous_window_rate = None
             trend_delta = None
             trend_direction = "insufficient"
-            trend_basis = "Au moins 3 tirages sont nécessaires pour afficher une tendance provisoire."
+            trend_basis = (
+                f"Signal provisoire : {recent_window_hits}/{window} apparitions récentes. "
+                "La comparaison directionnelle commence après 10 tirages."
+            )
+            trend_reliability = "provisional"
+        else:
+            previous_window_rate = None
+            trend_delta = None
+            trend_direction = "insufficient"
+            trend_basis = "Au moins 3 tirages sont nécessaires pour observer les fréquences récentes."
             trend_reliability = "insufficient"
 
         rows.append({
@@ -135,6 +140,7 @@ def _number_scores(draws: Sequence[dict]) -> list[dict]:
             "trend_basis": trend_basis,
             "trend_reliability": trend_reliability,
             "trend_window": window,
+            "recent_window_hits": recent_window_hits,
             "latest_draw_hit": n in draws[-1]["numbers"],
         })
     return rows

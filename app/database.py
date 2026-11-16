@@ -1,12 +1,17 @@
 from __future__ import annotations
 import os
+from pathlib import Path
 from datetime import date, datetime, timezone
 from sqlalchemy import create_engine, Date, DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 
 def _database_url() -> str:
-    url = os.getenv("DATABASE_URL", "sqlite:///./loto.db")
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        # Anchor SQLite to the project root, not the shell working directory.
+        db_path = Path(__file__).resolve().parents[1] / "loto.db"
+        url = f"sqlite:///{db_path.as_posix()}"
     if url.startswith("postgres://"):
         url = "postgresql+psycopg://" + url[len("postgres://"):]
     elif url.startswith("postgresql://"):
