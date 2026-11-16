@@ -34,7 +34,7 @@
     if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
     }
-    const response = await fetch(path, { ...options, headers, credentials: "same-origin" });
+    const response = await fetch(path, { ...options, headers, credentials: "same-origin", cache: "no-store" });
     const type = response.headers.get("content-type") || "";
     const payload = type.includes("application/json") ? await response.json() : null;
     if (!response.ok) {
@@ -136,9 +136,16 @@
   }
 
   function renderPrediction() {
-    const { prediction, backtest } = state.analysis;
+    const { summary, prediction, backtest } = state.analysis;
     $("#prediction-combo").innerHTML = prediction.numbers.map((n) => `<span>${String(n).padStart(2, "0")}</span>`).join("　·　");
     const top = prediction.ranked.slice(0, 15);
+    const trendWindow = prediction.ranked[0]?.trend_window || 0;
+    const latestDate = summary.latest_date ? formatDate(summary.latest_date) : "aucun tirage";
+    let trendLabel = "tendance disponible à partir de 3 tirages";
+    if (summary.draw_count >= 20) trendLabel = `${trendWindow} derniers vs ${trendWindow} précédents`;
+    else if (summary.draw_count >= 10) trendLabel = `${trendWindow} derniers vs ${trendWindow} précédents · signal provisoire`;
+    else if (summary.draw_count >= 3) trendLabel = `signal provisoire vs référence théorique · 14,29 %`;
+    $("#ranking-status").textContent = `Recalcul automatique · ${summary.draw_count} tirage(s) · dernier résultat : ${latestDate} · ${trendLabel}`;
     const min = Math.min(...top.map((x) => x.score));
     const max = Math.max(...top.map((x) => x.score));
     $("#prediction-ranking").innerHTML = top.map((row, index) => {
@@ -148,7 +155,7 @@
         : `${row.trend_delta >= 0 ? "+" : ""}${(row.trend_delta * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} pt`;
       const arrow = row.trend_direction === "up" ? "↗" : row.trend_direction === "down" ? "↘" : row.trend_direction === "stable" ? "→" : "·";
       const provisional = row.trend_reliability === "provisional" ? " · provisoire" : "";
-      return `<div class="ranking-row"><span class="rank-index">${String(index + 1).padStart(2, "0")}</span><span class="bar-number">${String(row.number).padStart(2, "0")}</span><div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div><span class="score">${pct(row.score, 2)}</span><span class="trend-value trend-${row.trend_direction}" title="${escapeHtml(row.trend_basis || "")} ">${arrow} ${movement}${provisional}</span></div>`;
+      return `<div class="ranking-row"><span class="rank-index">${String(index + 1).padStart(2, "0")}</span><span class="bar-number">${String(row.number).padStart(2, "0")}</span><div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div><span class="score" title="${row.latest_draw_hit ? "Présent dans le dernier tirage" : "Absent du dernier tirage"}">${pct(row.score, 3)}</span><span class="trend-value trend-${row.trend_direction}" title="${escapeHtml(row.trend_basis || "")} ">${arrow} ${movement}${provisional}</span></div>`;
     }).join("");
     $("#alternative-combos").innerHTML = prediction.alternatives.map((combo, index) => `
       <div class="alternative-row"><span>SCÉNARIO ${index + 2}</span><div class="ball-row">${combo.map((n) => ball(n)).join("")}</div></div>`).join("");

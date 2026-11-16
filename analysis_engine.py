@@ -16,8 +16,12 @@ import random
 N_NUMBERS = 35
 PICK_COUNT = 5
 BASE_RATE = PICK_COUNT / N_NUMBERS
-PRIOR_DRAWS = 24.0
-RECENCY_HALF_LIFE = 12.0
+PRIOR_DRAWS = 12.0
+RECENT_PRIOR_DRAWS = 6.0
+RECENCY_HALF_LIFE = 4.0
+RECENT_SCORE_WEIGHT = 0.60
+TREND_WINDOW = 5
+TREND_THRESHOLD = 0.03
 
 
 def _clean_draws(draws: Iterable[dict]) -> list[dict]:
@@ -46,12 +50,24 @@ def expected_overlap() -> float:
 
 
 def _number_scores(draws: Sequence[dict]) -> list[dict]:
-    """Return smoothed historical rates; not calibrated winning probabilities."""
+    """Return a responsive exploratory index and short-window trend indicators.
+
+    Scores are relative ranking indices, never calibrated winning probabilities.
+    Recent results receive more weight, while a moderate prior limits overreaction
+    when the recorded history is short.
+    """
     total = len(draws)
     if total == 0:
         return [
-            {"number": n, "score": BASE_RATE, "overall_rate": BASE_RATE,
-             "recent_rate": BASE_RATE, "count": 0, "gap": None}
+            {
+                "number": n, "score": BASE_RATE, "overall_rate": BASE_RATE,
+                "recent_rate": BASE_RATE, "count": 0, "gap": None,
+                "recent_window_rate": None, "previous_window_rate": None,
+                "trend_delta": None, "trend_direction": "insufficient",
+                "trend_basis": "Ajoute au moins 3 tirages pour observer une tendance.",
+                "trend_reliability": "insufficient", "trend_window": 0,
+                "latest_draw_hit": False,
+            }
             for n in range(1, N_NUMBERS + 1)
         ]
 
@@ -64,19 +80,16 @@ def _number_scores(draws: Sequence[dict]) -> list[dict]:
             weighted_hits[n] += weight
 
     rows = []
+    window = min(TREND_WINDOW, total)
+    has_trend = window >= 3
     for n in range(1, N_NUMBERS + 1):
-        # A 70-draw prior centered on the fair-lottery marginal rate prevents
-        # small samples from producing exaggerated "hot number" estimates.
         overall = (counts[n] + PRIOR_DRAWS * BASE_RATE) / (total + PRIOR_DRAWS)
-        recent = (weighted_hits[n] + PRIOR_DRAWS * BASE_RATE) / (weight_total + PRIOR_DRAWS)
-        score = 0.55 * overall + 0.45 * recent
+        recent = (weighted_hits[n] + RECENT_PRIOR_DRAWS * BASE_RATE) / (weight_total + RECENT_PRIOR_DRAWS)
+        score = (1.0 - RECENT_SCORE_WEIGHT) * overall + RECENT_SCORE_WEIGHT * recent
         last_index = next((i for i in range(total - 1, -1, -1) if n in draws[i]["numbers"]), None)
         gap = None if last_index is None else total - 1 - last_index
 
-        # Compare a recent window with the preceding window when possible.
-        # Before 20 draws, compare with the theoretical 1/7 rate and mark it provisional.
-        window = min(10, total)
-        if window >= 5:
+        if has_trend:
             recent_window = draws[-window:]
             recent_window_rate = sum(n in d["numbers"] for d in recent_window) / window
             if total >= 2 * window:
@@ -84,15 +97,19 @@ def _number_scores(draws: Sequence[dict]) -> list[dict]:
                 previous_window_rate = sum(n in d["numbers"] for d in previous_window) / window
                 trend_delta = recent_window_rate - previous_window_rate
                 trend_basis = f"{window} derniers tirages comparés aux {window} précédents"
-                trend_reliability = "comparative"
+                trend_reliability = "comparative" if total >= 20 else "provisional"
             else:
                 previous_window_rate = None
                 trend_delta = recent_window_rate - BASE_RATE
-                trend_basis = f"Signal provisoire : {window} derniers tirages comparés à la référence théorique de 14,29 %"
+                trend_basis = (
+                    f"Signal provisoire : {window} derniers tirages comparés "
+                    "à la référence théorique de 14,29 %"
+                )
                 trend_reliability = "provisional"
-            if trend_delta > 0.05:
+
+            if trend_delta > TREND_THRESHOLD:
                 trend_direction = "up"
-            elif trend_delta < -0.05:
+            elif trend_delta < -TREND_THRESHOLD:
                 trend_direction = "down"
             else:
                 trend_direction = "stable"
@@ -101,7 +118,7 @@ def _number_scores(draws: Sequence[dict]) -> list[dict]:
             previous_window_rate = None
             trend_delta = None
             trend_direction = "insufficient"
-            trend_basis = "Au moins 5 tirages sont nécessaires pour afficher une tendance provisoire."
+            trend_basis = "Au moins 3 tirages sont nécessaires pour afficher une tendance provisoire."
             trend_reliability = "insufficient"
 
         rows.append({
@@ -118,6 +135,7 @@ def _number_scores(draws: Sequence[dict]) -> list[dict]:
             "trend_basis": trend_basis,
             "trend_reliability": trend_reliability,
             "trend_window": window,
+            "latest_draw_hit": n in draws[-1]["numbers"],
         })
     return rows
 
@@ -270,7 +288,7 @@ def analyze_draws(raw_draws: Iterable[dict]) -> dict:
             "numbers": suggested,
             "ranked": ranked,
             "alternatives": alternatives,
-            "method": "Fréquence historique + pondération récente, fortement lissées vers 1/7.",
+            "method": "Indice exploratoire : historique lissé + récence à demi-vie de 4 tirages.",
             "baseline_rate": BASE_RATE,
             "confidence_note": "Indice exploratoire, pas une probabilité de gain. Si le tirage est équitable et indépendant, chaque numéro conserve 1 chance sur 7 à chaque tirage.",
         },

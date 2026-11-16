@@ -51,7 +51,7 @@
         {% if password_protected %}
         <form method="post" action="/logout" id="logout-form"><input type="hidden" name="csrf" value=""><button class="logout-btn" type="button" id="logout-button">↪ Déconnexion</button></form>
         {% endif %}
-        <div class="version">LOTO LAB <span>·</span> 1.1.1</div>
+        <div class="version">LOTO LAB <span>·</span> 1.1.2</div>
       </div>
     </aside>
 
@@ -133,7 +133,7 @@
         <div class="page-heading"><div><p class="eyebrow">LABORATOIRE EXPÉRIMENTAL</p><h1>Scores & tendances<span class="period-dot">.</span></h1><p class="subheading">Un classement exploratoire construit uniquement à partir des tirages enregistrés.</p></div><span class="pill pill-warning">EXPÉRIMENTAL</span></div>
         <div class="prediction-banner"><div class="prediction-orbit">✳</div><div><span class="eyebrow">COMBINAISON CLASSÉE PAR LE MODÈLE</span><h2 id="prediction-combo">—</h2><p>Classement statistique lissé — pas une prédiction certaine ni une amélioration démontrée des chances.</p></div><div class="prediction-method"><span>MÉTHODE</span><strong>Historique + récence</strong><small>Prior centré sur 1/7</small><button class="btn btn-secondary btn-sm" id="save-prediction">＋ Enregistrer ce pronostic</button></div></div>
         <div class="prediction-grid">
-          <article class="panel"><div class="panel-header"><div><p class="eyebrow">CLASSEMENT</p><h2>Top 15 des scores</h2><p class="panel-sub">Indice de classement lissé. La tendance compare les 10 derniers tirages aux 10 précédents ; avant 20 tirages, elle reste provisoire par rapport à 14,29 %.</p></div></div><div id="prediction-ranking" class="ranking-list"></div></article>
+          <article class="panel"><div class="panel-header"><div><p class="eyebrow">CLASSEMENT</p><h2>Top 15 des scores</h2><p class="panel-sub" id="ranking-status">Recalcul automatique après chaque ajout, modification ou suppression de tirage.</p></div></div><div id="prediction-ranking" class="ranking-list"></div></article>
           <article class="panel"><div class="panel-header"><div><p class="eyebrow">AUTRES COMBINAISONS</p><h2>Scénarios alternatifs</h2><p class="panel-sub">Variantes générées à partir des scores historiques.</p></div></div><div id="alternative-combos" class="alternative-list"></div><div class="model-caveat"><strong>À ne pas confondre</strong><p>Chaque combinaison de 5 numéros distincts a exactement la même probabilité théorique : 1 sur 324 632, si le tirage est uniforme.</p></div></article>
         </div>
         <article class="panel prediction-history-panel"><div class="panel-header"><div><p class="eyebrow">SUIVI RÉEL DES PRÉVISIONS</p><h2>Prévisions enregistrées</h2><p class="panel-sub">Chaque prévision enregistrée sera comparée au premier tirage ajouté après sa date de référence.</p></div><span class="pill pill-neutral" id="forecast-count">0 ENREGISTRÉE</span></div><div class="table-scroll"><table><thead><tr><th>CRÉÉE SUR LA BASE DU</th><th>NUMÉROS PROPOSÉS</th><th>TIRAGE SUIVANT</th><th>NUMÉROS RÉELS</th><th>TOUCHÉS</th></tr></thead><tbody id="forecast-history-body"><tr><td colspan="5" class="empty-cell">Aucune prévision enregistrée pour l'instant.</td></tr></tbody></table></div></article>

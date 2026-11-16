@@ -8,7 +8,7 @@ Application web en français pour enregistrer les tirages 5/35 et suivre les fr�
 - Import CSV et export CSV de tout l'historique.
 - Tableau de bord : volume de données, fréquences, dernier résultat et répétitions entre dates calendaires consécutives.
 - Analyses : fréquences des 35 numéros, retours au tirage enregistré suivant, paires récurrentes et distribution des numéros communs.
-- Scores exploratoires avec un a priori bayésien de 24 tirages, une demi-vie de récence de 12 tirages et un mélange 55 % historique / 45 % récent ; la tendance compare les 10 derniers tirages aux 10 précédents dès que 20 résultats sont disponibles.
+- Scores exploratoires recalculés après chaque changement de l’historique, avec un a priori historique de 12 tirages, une demi-vie récente de 4 tirages et un poids récent de 60 % ; la tendance compare les 5 derniers tirages aux 5 précédents dès 10 résultats, et reste provisoire avant 20 résultats.
 - Audit scientifique : tests exacts des 35 fréquences et 595 paires, contrôle Holm-Bonferroni des comparaisons multiples, dépendances aux retards 1 à 5 et validation chronologique hors échantillon.
 - Thème Automatique / Clair / Sombre, mémorisé dans le navigateur et synchronisé entre la connexion, le tableau de bord et l’audit scientifique.
 - Enregistrement horodaté des pronostics et évaluation automatique contre le premier tirage suivant.
@@ -107,7 +107,7 @@ Pour un tirage équitable de 5 numéros parmi 35 :
 - Le nombre moyen de numéros communs entre deux tirages est `25/35 = 0,714`.
 - Une combinaison précise de 5 numéros a une probabilité de `1/C(35,5) = 1/324 632`.
 
-Le classement utilise les fréquences observées et la récence, mais les ramène fortement vers le taux théorique 1/7 pour limiter les emballements dus aux petits échantillons. Les scores ne sont pas des probabilités de gain. Si le mécanisme est équitable et indépendant, aucune méthode fondée uniquement sur les anciens tirages ne peut garantir une meilleure chance au prochain tirage.
+Le classement combine les fréquences historiques et une composante récente plus réactive, avec un lissage modéré pour limiter les emballements dus aux petits échantillons. Les scores ne sont pas des probabilités de gain. Si le mécanisme est équitable et indépendant, aucune méthode fondée uniquement sur les anciens tirages ne peut garantir une meilleure chance au prochain tirage.
 
 ## Structure
 
