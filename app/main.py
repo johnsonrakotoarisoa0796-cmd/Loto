@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
@@ -185,7 +185,17 @@ async def security_headers(request: Request, call_next):
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": "loto-5-35"}
+    """Render health check: report healthy only when the configured DB is reachable."""
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except Exception as exc:
+        # Do not expose driver errors or connection details in the public response.
+        raise HTTPException(
+            status_code=503,
+            detail="Base de données indisponible. Vérifie DATABASE_URL et la connexion Supabase.",
+        ) from exc
+    return {"status": "ok", "database": "ok", "service": "loto-5-35"}
 
 
 @app.get("/login", response_class=HTMLResponse)
