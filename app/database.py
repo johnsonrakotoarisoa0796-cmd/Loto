@@ -7,11 +7,27 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 
 def _database_url() -> str:
-    url = os.getenv("DATABASE_URL")
+    url = (os.getenv("DATABASE_URL") or "").strip()
+    on_render = os.getenv("RENDER", "").strip().lower() == "true"
+
+    # Render's filesystem is ephemeral: silently falling back to SQLite would
+    # make draw history disappear on restart/redeploy. Require external Postgres.
     if not url:
-        # Anchor SQLite to the project root, not the shell working directory.
+        if on_render:
+            raise RuntimeError(
+                "DATABASE_URL is required on Render. Configure the Supabase "
+                "PostgreSQL connection string in the Render Environment settings."
+            )
+        # Anchor local SQLite to the project root, not the shell working directory.
         db_path = Path(__file__).resolve().parents[1] / "loto.db"
         url = f"sqlite:///{db_path.as_posix()}"
+
+    if on_render and url.lower().startswith("sqlite"):
+        raise RuntimeError(
+            "SQLite is not supported for persistent production storage on Render. "
+            "Set DATABASE_URL to the Supabase PostgreSQL connection string."
+        )
+
     if url.startswith("postgres://"):
         url = "postgresql+psycopg://" + url[len("postgres://"):]
     elif url.startswith("postgresql://"):

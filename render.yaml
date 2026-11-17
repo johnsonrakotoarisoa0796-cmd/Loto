@@ -10,7 +10,10 @@ services:
     autoDeployTrigger: commit
     envVars:
       - key: PYTHON_VERSION
-        value: 3.12.8
+        value: "3.12.8"
+      # Set this secret manually in Render to the Supabase PostgreSQL URI.
+      - key: DATABASE_URL
+        sync: false
       - key: SECRET_KEY
         generateValue: true
       - key: APP_PASSWORD

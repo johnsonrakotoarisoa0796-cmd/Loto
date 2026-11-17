@@ -75,28 +75,38 @@ git push -u origin main
 
 Le dépôt cible doit être vide. Si GitHub demande une authentification, utilise le compte qui possède le dépôt ou un compte auquel l'accès **Write** a été accordé.
 
-## Déploiement Render
+## Déploiement Render avec Supabase
 
-Le fichier `render.yaml` déclare :
+Le service web Render utilise **Supabase PostgreSQL comme base externe**. Aucun service PostgreSQL Render payant n'est créé par ce Blueprint. Le fichier `render.yaml` déclare la variable `DATABASE_URL` comme secret à fournir manuellement.
 
-- un Web Service Python sur le plan Free (il peut s'endormir après 15 minutes d'inactivité) ;
-- une base PostgreSQL persistante sur le plus petit plan payant `0.1c-256mb` ;
-- une clé de session générée par Render ;
-- `APP_PASSWORD` à saisir manuellement dans Render ;
-- la région Singapore pour le service et sa base.
+### 1. Préparer Supabase
 
-**Attention au coût de la base :** le tarif public Render consulté le 14 novembre 2026 indique 6 USD/mois pour le plan PostgreSQL `0.1c-256mb`. Le plan PostgreSQL gratuit expire au bout de 30 jours puis les données sont supprimées après la période de grâce ; il n'est donc pas sélectionné pour l'installation durable. Le Web Service Free peut dormir lorsqu'il est inactif. Vérifie les tarifs et limites dans ton compte avant de valider le Blueprint.
+1. Ouvre le projet Supabase qui contient l'historique Loto Lab.
+2. Dans **Project Settings → Database**, récupère la chaîne de connexion PostgreSQL (Connection string).
+3. Utilise le mode **Session pooler** si ton application se connecte via IPv4 ou si tu suis les recommandations de Supabase pour un hébergement applicatif persistant.
+4. Ne colle jamais cette URL dans GitHub, dans le code ou dans un message public. Si le mot de passe de base a déjà été partagé, réinitialise-le dans Supabase avant de continuer.
 
-Quand le dépôt GitHub sera prêt :
+### 2. Configurer Render
 
-1. Pousse tout le contenu de ce dossier sur la branche `main` de `johnsonrakotoarisoa0796-cmd/Loto`.
-2. Ouvre `https://dashboard.render.com/blueprint/new?repo=https://github.com/johnsonrakotoarisoa0796-cmd/Loto`.
-3. Connecte le dépôt à Render si ce n'est pas déjà fait.
-4. Vérifie les ressources et le tarif du PostgreSQL avant de cliquer sur **Apply**.
-5. Renseigne `APP_PASSWORD` dans les variables manuelles demandées par Render.
-6. Une fois le service déployé, teste `/health`, la connexion, l'ajout d'un tirage et l'export CSV.
+Dans le Web Service Render existant, ouvre **Environment** et vérifie les variables :
 
-Ne valide pas l'installation de la base payante tant que tu n'as pas accepté son coût.
+- `DATABASE_URL` : URI PostgreSQL de Supabase, avec le mot de passe actuel. L'application convertit automatiquement les URI `postgresql://` et `postgres://` au pilote psycopg 3.
+- `APP_PASSWORD` : mot de passe d'accès à Loto Lab, à définir obligatoirement.
+- `SECRET_KEY` : secret long et aléatoire pour signer les sessions. Render peut le générer.
+- `COOKIE_SECURE=true` : active les cookies HTTPS.
+- `PYTHON_VERSION=3.12.8` : version Python utilisée au build.
+
+**Important :** le démarrage échoue volontairement sur Render si `DATABASE_URL` est absent, si la valeur pointe vers SQLite, ou si les secrets applicatifs ne sont pas définis. Cela évite de faire croire que les tirages sont sauvegardés durablement alors qu'ils seraient stockés sur le disque éphémère de Render.
+
+### 3. Déployer et contrôler
+
+1. Pousse la branche corrigée puis fusionne la Pull Request après vérification.
+2. Laisse Render déployer le commit sur le service existant. Ne crée pas une nouvelle base Render.
+3. Ouvre `https://TON-SERVICE.onrender.com/health`. La réponse doit indiquer `"status":"ok"` et `"database":"ok"`.
+4. Connecte-toi et vérifie que l'historique attendu est présent avant toute opération d'écriture.
+5. Ajoute un tirage de test uniquement si tu peux ensuite le supprimer, puis vérifie l'export CSV.
+
+La route `/health` exécute maintenant une requête SQL réelle. Elle renvoie HTTP 503 si la base n'est pas joignable, sans exposer le détail de la chaîne de connexion.
 
 ## Limites statistiques importantes
 
