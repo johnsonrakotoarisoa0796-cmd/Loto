@@ -135,49 +135,125 @@
       <tr><td>${formatDate(t.from_date)}</td><td>${formatDate(t.to_date)}</td><td>${t.shared_count ? `<div class="ball-row">${t.shared_numbers.map((n) => ball(n, true, true)).join("")}</div>` : `<span class="no-repeat">Aucun numéro commun</span>`}</td><td>${t.calendar_days_apart} jour${t.calendar_days_apart > 1 ? "s" : ""}</td></tr>`).join("") : `<tr><td colspan="4" class="empty-cell">Deux tirages sont nécessaires.</td></tr>`;
   }
 
+
+  function scoreIndex(value) {
+    return value == null ? "—" : Number(value).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " pts";
+  }
+
+  function renderMovementList(rows, selector, direction, available) {
+    const node = $(selector);
+    if (!available) {
+      node.innerHTML = '<div class="empty-state">Il faut au moins deux tirages pour comparer les rangs.</div>';
+      return;
+    }
+    if (!rows.length) {
+      node.innerHTML = '<div class="empty-state">Aucun mouvement de rang dans ce sens après le dernier tirage.</div>';
+      return;
+    }
+    const arrow = direction === "up" ? "↗" : "↘";
+    node.innerHTML = rows.map((row) =>
+      '<div class="movement-row movement-' + direction + '">' +
+        '<span class="movement-ball">' + String(row.number).padStart(2, "0") + '</span>' +
+        '<span class="movement-ranks">#' + row.previous_rank + ' <i>→</i> #' + row.rank + '</span>' +
+        '<strong>' + arrow + ' ' + Math.abs(row.rank_change) + ' place' + (Math.abs(row.rank_change) > 1 ? 's' : '') + '</strong>' +
+      '</div>'
+    ).join("");
+  }
+
   function renderPrediction() {
     const { summary, prediction, backtest } = state.analysis;
-    $("#prediction-combo").innerHTML = prediction.numbers.map((n) => `<span>${String(n).padStart(2, "0")}</span>`).join("　·　");
+    const models = prediction.models || [];
+    const primary = models.find((model) => model.id === "hybrid") || models[0];
+    $("#prediction-combo").innerHTML = prediction.numbers.map((n) => '<span>' + String(n).padStart(2, "0") + '</span>').join("　·　");
+    if (primary) {
+      $("#prediction-method-name").textContent = primary.label;
+      $("#prediction-combo-score").textContent = "Indice moyen de la combinaison : " + scoreIndex(primary.score_index);
+    }
+
     const top = prediction.ranked.slice(0, 15);
     const trendWindow = prediction.ranked[0]?.trend_window || 0;
     const latestDate = summary.latest_date ? formatDate(summary.latest_date) : "aucun tirage";
     let trendLabel = "tendance disponible à partir de 3 tirages";
-    if (summary.draw_count >= 20) trendLabel = `${trendWindow} derniers vs ${trendWindow} précédents`;
-    else if (summary.draw_count >= 10) trendLabel = `${trendWindow} derniers vs ${trendWindow} précédents · signal provisoire`;
-    else if (summary.draw_count >= 3) trendLabel = `historique court · direction disponible après 10 tirages`;
-    $("#ranking-status").textContent = `Recalcul automatique · ${summary.draw_count} tirage(s) · dernier résultat : ${latestDate} · ${trendLabel}`;
-    const min = Math.min(...top.map((x) => x.score));
-    const max = Math.max(...top.map((x) => x.score));
+    if (summary.draw_count >= 20) trendLabel = trendWindow + " derniers vs " + trendWindow + " précédents";
+    else if (summary.draw_count >= 10) trendLabel = trendWindow + " derniers vs " + trendWindow + " précédents · signal provisoire";
+    else if (summary.draw_count >= 3) trendLabel = "historique court · direction disponible après 10 tirages";
+    $("#ranking-status").textContent = "Recalcul automatique · " + summary.draw_count + " tirage(s) · dernier résultat : " + latestDate + " · " + trendLabel;
+    const min = Math.min(...top.map((x) => x.score_index));
+    const max = Math.max(...top.map((x) => x.score_index));
     $("#prediction-ranking").innerHTML = top.map((row, index) => {
-      const width = max === min ? 50 : 16 + (row.score - min) / (max - min) * 84;
-      const movement = row.trend_delta == null
-        ? `${row.recent_window_hits ?? 0}/${row.trend_window || 0} récents`
-        : `${row.trend_delta >= 0 ? "+" : ""}${(row.trend_delta * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} pt`;
-      const arrow = row.trend_direction === "up" ? "↗" : row.trend_direction === "down" ? "↘" : row.trend_direction === "stable" ? "→" : "·";
-      const provisional = row.trend_reliability === "provisional" ? " · provisoire" : "";
-      return `<div class="ranking-row"><span class="rank-index">${String(index + 1).padStart(2, "0")}</span><span class="bar-number">${String(row.number).padStart(2, "0")}</span><div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div><span class="score" title="${row.latest_draw_hit ? "Présent dans le dernier tirage" : "Absent du dernier tirage"}">${pct(row.score, 3)}</span><span class="trend-value trend-${row.trend_direction}" title="${escapeHtml(row.trend_basis || "")} ">${arrow} ${movement}${provisional}</span></div>`;
+      const width = max === min ? 50 : 16 + (row.score_index - min) / (max - min) * 84;
+      const movement = row.rank_change == null
+        ? "premier classement"
+        : row.rank_change > 0 ? "↗ +" + row.rank_change + " place" + (row.rank_change > 1 ? "s" : "")
+        : row.rank_change < 0 ? "↘ " + row.rank_change + " place" + (row.rank_change < -1 ? "s" : "")
+        : "→ stable";
+      const trend = row.trend_direction === "up" ? "↗" : row.trend_direction === "down" ? "↘" : row.trend_direction === "stable" ? "→" : "·";
+      return '<div class="ranking-row">' +
+        '<span class="rank-index">' + String(index + 1).padStart(2, "0") + '</span>' +
+        '<span class="bar-number">' + String(row.number).padStart(2, "0") + '</span>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + width + '%"></div></div>' +
+        '<span class="score" title="Indice relatif base 100, pas une probabilité">' + scoreIndex(row.score_index) + '</span>' +
+        '<span class="trend-value trend-' + row.trend_direction + '" title="' + escapeHtml(row.trend_basis || "") + '">' + trend + ' ' + movement + '</span>' +
+      '</div>';
     }).join("");
-    $("#alternative-combos").innerHTML = prediction.alternatives.map((combo, index) => `
-      <div class="alternative-row"><span>SCÉNARIO ${index + 2}</span><div class="ball-row">${combo.map((n) => ball(n)).join("")}</div></div>`).join("");
-    if (!backtest.available) {
-      $("#backtest-content").innerHTML = `<div class="backtest-message">${escapeHtml(backtest.reason)}<br>Le test sera activé automatiquement quand l'historique sera assez long.</div>`;
+
+    const alternatives = models.filter((model) => model.id !== "hybrid");
+    $("#alternative-combos").innerHTML = alternatives.length ? alternatives.map((model) =>
+      '<section class="method-card">' +
+        '<div class="method-card-head"><div><strong>' + escapeHtml(model.label) + '</strong><p>' + escapeHtml(model.description) + '</p></div>' +
+        '<span class="method-index">' + scoreIndex(model.score_index) + '</span></div>' +
+        '<div class="method-combo">' + model.numbers.map((n) => ball(n, false, true)).join("") + '</div>' +
+        '<small>Indice moyen des 5 numéros · base 100</small>' +
+      '</section>'
+    ).join("") : '<div class="empty-state">Les méthodes alternatives seront affichées après le chargement des données.</div>';
+
+    const movements = prediction.movements || { available: false, up: [], down: [] };
+    renderMovementList(movements.up || [], "#rank-up-movers", "up", movements.available);
+    renderMovementList(movements.down || [], "#rank-down-movers", "down", movements.available);
+
+    const comparison = backtest.methods_comparison;
+    if (!comparison || !comparison.available) {
+      $("#backtest-content").innerHTML = '<div class="backtest-message">' + escapeHtml((comparison && comparison.reason) || backtest.reason || "Le comparatif chronologique est indisponible.") + '</div>';
     } else {
-      const advantage = backtest.model_average_hits - backtest.random_expected_hits;
-      $("#backtest-content").innerHTML = `
-        <div class="backtest-metric"><span>Tirages testés</span><strong>${backtest.tested_draws}</strong></div>
-        <div class="backtest-metric"><span>Moyenne du modèle</span><strong>${backtest.model_average_hits.toFixed(2).replace(".", ",")} / 5</strong></div>
-        <div class="backtest-metric"><span>Référence aléatoire</span><strong>${backtest.random_expected_hits.toFixed(2).replace(".", ",")} / 5</strong></div>
-        <div class="backtest-message">Écart observé : ${advantage >= 0 ? "+" : ""}${advantage.toFixed(2).replace(".", ",")} numéro(s) par tirage. ${escapeHtml(backtest.warning || "")} Ce résultat historique n'est pas une garantie de performance future.</div>`;
+      const methodRows = comparison.methods.map((model) => {
+        const difference = model.difference;
+        const direction = difference > 0.000001 ? "positive" : difference < -0.000001 ? "negative" : "neutral";
+        const signed = (difference > 0 ? "+" : "") + difference.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+        return '<tr>' +
+          '<td><strong>' + escapeHtml(model.label) + '</strong><small>' + escapeHtml(model.note) + '</small></td>' +
+          '<td>' + model.tested_draws + '</td>' +
+          '<td><strong>' + model.average_hits.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' / 5</strong></td>' +
+          '<td>' + model.expected_hits.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' / 5</td>' +
+          '<td class="backtest-' + direction + '">' + signed + '</td>' +
+        '</tr>';
+      }).join("");
+      const caveat = comparison.tested_draws < 20
+        ? "Le nombre de tests est encore très insuffisant pour conclure."
+        : comparison.tested_draws < 40
+          ? "Il faut davantage de prévisions indépendantes pour une évaluation plus informative."
+          : "Continuer le suivi prospectif avant toute conclusion.";
+      $("#backtest-content").innerHTML =
+        '<div class="backtest-summary">' +
+          '<span><strong>' + comparison.tested_draws + '</strong> prévision(s) hors échantillon par méthode</span>' +
+          '<span>Apprentissage initial : ' + comparison.training_draws + ' tirages</span>' +
+          '<span>Référence aléatoire : ' + comparison.expected_hits.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' / 5</span>' +
+        '</div>' +
+        '<div class="table-scroll"><table class="model-comparison-table">' +
+          '<thead><tr><th>MÉTHODE</th><th>TESTS</th><th>MOYENNE OBSERVÉE</th><th>HASARD ATTENDU</th><th>ÉCART</th></tr></thead>' +
+          '<tbody>' + methodRows + '</tbody>' +
+        '</table></div>' +
+        '<p class="micro-note">' + escapeHtml(comparison.methodology || "") + ' Une différence positive sur un petit échantillon n’est pas une preuve d’avantage prédictif. ' + caveat + '</p>';
     }
 
     const forecasts = state.forecastHistory;
-    $("#forecast-count").textContent = `${forecasts.length} ENREGISTRÉE${forecasts.length > 1 ? "S" : ""}`;
-    $("#forecast-history-body").innerHTML = forecasts.length ? forecasts.map((item) => `
-      <tr><td>${formatDate(item.based_on_latest_date)}<br><small>${item.based_on_draw_count} tirages disponibles</small></td>
-      <td><div class="ball-row">${item.numbers.map((n) => ball(n, false, true)).join("")}</div></td>
-      <td>${item.actual_draw_date ? formatDate(item.actual_draw_date) : `<span class="no-repeat">En attente du prochain tirage</span>`}</td>
-      <td>${item.actual_numbers ? `<div class="ball-row">${item.actual_numbers.map((n) => ball(n, item.numbers.includes(n), true)).join("")}</div>` : "—"}</td>
-      <td>${item.evaluated ? `<strong>${item.hits}/5</strong>` : "—"}</td></tr>`).join("") : `<tr><td colspan="5" class="empty-cell">Enregistre ton premier pronostic pour commencer à mesurer le modèle.</td></tr>`;
+    $("#forecast-count").textContent = forecasts.length + " ENREGISTRÉE" + (forecasts.length > 1 ? "S" : "");
+    $("#forecast-history-body").innerHTML = forecasts.length ? forecasts.map((item) =>
+      '<tr><td>' + formatDate(item.based_on_latest_date) + '<br><small>' + item.based_on_draw_count + ' tirages disponibles</small></td>' +
+      '<td><div class="ball-row">' + item.numbers.map((n) => ball(n, false, true)).join("") + '</div></td>' +
+      '<td>' + (item.actual_draw_date ? formatDate(item.actual_draw_date) : '<span class="no-repeat">En attente du prochain tirage</span>') + '</td>' +
+      '<td>' + (item.actual_numbers ? '<div class="ball-row">' + item.actual_numbers.map((n) => ball(n, item.numbers.includes(n), true)).join("") + '</div>' : "—") + '</td>' +
+      '<td>' + (item.evaluated ? '<strong>' + item.hits + '/5</strong>' : "—") + '</td></tr>'
+    ).join("") : '<tr><td colspan="5" class="empty-cell">Enregistre ton premier pronostic pour commencer à mesurer le modèle.</td></tr>';
   }
 
   function renderAll() {
