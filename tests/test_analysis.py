@@ -96,13 +96,13 @@ def test_rank_movements_compare_latest_ranking_to_previous_draw():
     rows = [[2, 3, 4, 5, 6] for _ in range(10)]
     after = analyze_draws(as_dict([
         (date(2026, 1, 1) + timedelta(days=i), row)
-        for i, row in enumerate(rows + [[1, 7, 8, 9, 10]])
+        for i, row in enumerate(rows + [[31, 32, 33, 34, 35]])
     ]))
-    number_seven = next(row for row in after["prediction"]["ranked"] if row["number"] == 7)
-    assert number_seven["rank_change"] is not None
-    assert number_seven["rank_change"] > 0
+    number_thirty_one = next(row for row in after["prediction"]["ranked"] if row["number"] == 31)
+    assert number_thirty_one["rank_change"] is not None
+    assert number_thirty_one["rank_change"] > 0
     assert after["prediction"]["movements"]["available"] is True
-    assert any(row["number"] == 7 for row in after["prediction"]["movements"]["up"])
+    assert any(row["number"] == 31 for row in after["prediction"]["movements"]["up"])
 
 
 def test_methods_backtest_is_walk_forward_and_reports_random_baseline():
