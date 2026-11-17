@@ -63,3 +63,72 @@ def test_invalid_draw_is_rejected():
     bad = [{"date": date(2026, 11, 1), "numbers": [1, 1, 2, 3, 4]}]
     with pytest.raises(ValueError):
         analyze_draws(bad)
+
+
+
+def test_prediction_exposes_three_fixed_and_distinct_models():
+    result = analyze_draws(as_dict())
+    models = result["prediction"]["models"]
+    assert [model["id"] for model in models] == ["hybrid", "frequency", "recent"]
+    for model in models:
+        assert len(model["numbers"]) == 5
+        assert len(set(model["numbers"])) == 5
+        assert all(1 <= number <= 35 for number in model["numbers"])
+        assert model["score_index"] > 0
+    assert result["prediction"]["numbers"] == models[0]["numbers"]
+    assert result["prediction"]["alternatives"] == [models[1]["numbers"], models[2]["numbers"]]
+
+
+def test_recent_and_global_frequency_methods_can_react_differently():
+    rows = [[1, 2, 3, 4, 5] for _ in range(25)]
+    rows.extend([[6, 7, 8, 9, 10] for _ in range(5)])
+    models = analyze_draws(as_dict([
+        (date(2026, 1, 1) + __import__("datetime").timedelta(days=i), row)
+        for i, row in enumerate(rows)
+    ]))["prediction"]["models"]
+    frequency = next(model for model in models if model["id"] == "frequency")
+    recent = next(model for model in models if model["id"] == "recent")
+    assert frequency["numbers"] == [1, 2, 3, 4, 5]
+    assert recent["numbers"] == [6, 7, 8, 9, 10]
+
+
+def test_rank_movements_compare_latest_ranking_to_previous_draw():
+    rows = [[2, 3, 4, 5, 6] for _ in range(10)]
+    before = analyze_draws(as_dict())
+    after = analyze_draws(as_dict([
+        (date(2026, 1, 1) + __import__("datetime").timedelta(days=i), row)
+        for i, row in enumerate(rows + [[1, 7, 8, 9, 10]])
+    ]))
+    number_one = next(row for row in after["prediction"]["ranked"] if row["number"] == 1)
+    assert number_one["rank_change"] is not None
+    assert number_one["rank_change"] > 0
+    assert after["prediction"]["movements"]["available"] is True
+    assert any(row["number"] == 1 for row in after["prediction"]["movements"]["up"])
+
+
+def test_methods_backtest_is_walk_forward_and_reports_random_baseline():
+    rows = [[(i + j) % 35 + 1 for j in range(5)] for i in range(40)]
+    result = analyze_draws(as_dict([
+        (date(2026, 1, 1) + __import__("datetime").timedelta(days=i), row)
+        for i, row in enumerate(rows)
+    ]))
+    comparison = result["backtest"]["methods_comparison"]
+    assert comparison["available"] is True
+    assert comparison["training_draws"] == 30
+    assert comparison["tested_draws"] == 10
+    assert comparison["expected_hits"] == pytest.approx(25 / 35)
+    assert [row["id"] for row in comparison["methods"]] == ["hybrid", "frequency", "recent"]
+    assert all(row["tested_draws"] == 10 for row in comparison["methods"])
+    assert all(row["sample_level"] == "short" for row in comparison["methods"])
+
+
+def test_methods_backtest_waits_until_one_draw_after_training():
+    rows = [[1, 2, 3, 4, 5] for _ in range(30)]
+    result = analyze_draws(as_dict([
+        (date(2026, 1, 1) + __import__("datetime").timedelta(days=i), row)
+        for i, row in enumerate(rows)
+    ]))
+    comparison = result["backtest"]["methods_comparison"]
+    assert comparison["available"] is False
+    assert comparison["tested_draws"] == 0
+    assert "31" in comparison["reason"]
