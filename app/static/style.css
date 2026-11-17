@@ -99,3 +99,53 @@
 :root[data-theme="dark"] .trend-down{color:#ffad8d}
 @media(max-width:560px){.ranking-row{grid-template-columns:21px 25px minmax(30px,1fr) 45px 86px;gap:6px}.trend-value{font-size:7px}}
 @media(max-width:380px){.ranking-row{grid-template-columns:19px 23px minmax(25px,1fr) 42px 76px;gap:4px}.trend-value{font-size:6px}}
+
+/* Prediction laboratory: transparent model scores, movements and walk-forward comparison */
+.prediction-main{min-width:0}
+.prediction-method .score-disclaimer{display:block;color:#aab7d0;font-size:8px;line-height:1.4;margin:3px 0 7px}
+.prediction-grid .ranking-row{grid-template-columns:25px 27px minmax(55px,1fr) 62px minmax(112px,auto);gap:8px}
+.prediction-grid .ranking-row .score{font-size:9px;white-space:nowrap}
+.prediction-grid .ranking-row .trend-value{font:8px 'DM Mono',monospace;white-space:nowrap;text-align:right}
+.method-card-list{display:grid;gap:11px}
+.method-card{padding:13px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.method-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.method-card-head strong{font-size:11px;color:var(--ink)}
+.method-card-head p{margin:4px 0 0;color:var(--muted);font-size:9px;line-height:1.55}
+.method-index{flex:none;border-radius:8px;padding:5px 7px;background:var(--paper);border:1px solid var(--line);font:10px 'DM Mono',monospace;color:var(--blue)}
+.method-combo{display:flex;align-items:center;gap:6px;margin:11px 0 7px;flex-wrap:wrap}
+.method-card>small{font-size:8px;color:var(--muted)}
+.movement-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px}
+.movement-list{display:grid;gap:8px}
+.movement-row{display:grid;grid-template-columns:35px 1fr auto;align-items:center;gap:10px;padding:8px 9px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.movement-ball{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--navy2);color:white;font:700 10px 'DM Mono',monospace}
+.movement-ranks{font:10px 'DM Mono',monospace;color:var(--muted)}
+.movement-ranks i{font-style:normal;color:var(--muted);padding:0 3px}
+.movement-row strong{font-size:9px;white-space:nowrap}
+.movement-up strong{color:var(--green)}
+.movement-down strong{color:var(--orange)}
+.backtest-content{display:block}
+.backtest-summary{display:flex;flex-wrap:wrap;gap:8px 18px;padding:11px 13px;margin-bottom:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font-size:9px;color:var(--muted)}
+.backtest-summary strong{color:var(--ink);font:700 12px 'DM Mono',monospace}
+.model-comparison-table{width:100%;border-collapse:collapse;min-width:650px}
+.model-comparison-table th,.model-comparison-table td{padding:11px 9px;border-bottom:1px solid var(--line);text-align:left;font-size:9px;vertical-align:middle}
+.model-comparison-table th{color:var(--muted);font-size:8px;letter-spacing:.8px}
+.model-comparison-table td:first-child{min-width:185px}
+.model-comparison-table td:first-child strong,.model-comparison-table td:first-child small{display:block}
+.model-comparison-table td:first-child strong{color:var(--ink);font-size:10px}
+.model-comparison-table td:first-child small{color:var(--muted);font-size:8px;line-height:1.5;margin-top:3px}
+.backtest-positive{color:var(--green);font:700 10px 'DM Mono',monospace}
+.backtest-negative{color:var(--orange);font:700 10px 'DM Mono',monospace}
+.backtest-neutral{color:var(--muted);font:700 10px 'DM Mono',monospace}
+:root[data-theme="dark"] .method-card,:root[data-theme="dark"] .movement-row,:root[data-theme="dark"] .backtest-summary{background:#0e1929;border-color:var(--line)}
+:root[data-theme="dark"] .method-index{background:#14233a;border-color:var(--line)}
+:root[data-theme="dark"] .movement-ball{background:#263b5c}
+@media(max-width:800px){.movement-grid{grid-template-columns:1fr}.prediction-grid .ranking-row{grid-template-columns:25px 27px minmax(50px,1fr) 58px minmax(100px,auto)}}
+@media(max-width:560px){
+  .prediction-grid .ranking-row{grid-template-columns:20px 25px minmax(40px,1fr) 52px;gap:6px}
+  .prediction-grid .ranking-row .trend-value{grid-column:3 / 5;text-align:left;font-size:8px;white-space:normal;margin-top:-3px}
+  .prediction-method{margin-left:0}
+  .movement-grid{gap:10px}
+  .movement-row{grid-template-columns:32px minmax(70px,1fr) auto;gap:7px;padding:7px}
+  .movement-row strong{font-size:8px}
+  .backtest-summary{gap:7px;flex-direction:column}
+}
