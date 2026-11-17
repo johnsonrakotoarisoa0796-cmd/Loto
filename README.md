@@ -8,7 +8,11 @@ Application web en français pour enregistrer les tirages 5/35 et suivre les fr�
 - Import CSV et export CSV de tout l'historique.
 - Tableau de bord : volume de données, fréquences, dernier résultat et répétitions entre dates calendaires consécutives.
 - Analyses : fréquences des 35 numéros, retours au tirage enregistré suivant, paires récurrentes et distribution des numéros communs.
-- Scores exploratoires recalculés après chaque changement de l’historique ; la tendance ne donne pas de direction avant 10 tirages, compare ensuite deux fenêtres de 5 tirages et utilise un seuil de 20 points pour limiter les faux signaux sur de petits échantillons.
+- Laboratoire multi-modèles : trois classements distincts et fixes (historique + récence, fréquence globale lissée, récence courte) avec indices relatifs base 100, jamais interprétés comme des probabilités.
+- Évolution des rangs : comparaison du classement hybride courant avec celui calculé avant le dernier tirage, pour afficher les numéros en progression et en recul.
+- Scénarios alternatifs issus des deux autres modèles statistiques, et non de combinaisons pseudo-aléatoires.
+- Backtest chronologique comparant les trois méthodes à la référence aléatoire de 0,714 numéro touché en moyenne par combinaison de cinq. L'apprentissage commence après 30 tirages ; les résultats sont explicitement qualifiés de très courts ou exploratoires lorsque l'échantillon de test est petit.
+- Tendances directionnelles : comparaison de deux fenêtres de 5 tirages à partir de 10 tirages, avec un seuil fixe pour limiter les faux signaux sur de petits échantillons.
 - Audit scientifique : tests exacts des 35 fréquences et 595 paires, contrôle Holm-Bonferroni des comparaisons multiples, dépendances aux retards 1 à 5 et validation chronologique hors échantillon.
 - Thème Automatique / Clair / Sombre, mémorisé dans le navigateur et synchronisé entre la connexion, le tableau de bord et l’audit scientifique.
 - Enregistrement horodaté des pronostics et évaluation automatique contre le premier tirage suivant.
