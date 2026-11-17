@@ -169,6 +169,11 @@ def initialize_database() -> None:
 
 @app.on_event("startup")
 def startup() -> None:
+    if os.getenv("RENDER", "").strip().lower() == "true":
+        if not APP_PASSWORD:
+            raise RuntimeError("APP_PASSWORD must be configured in Render before exposing Loto Lab.")
+        if not os.getenv("SECRET_KEY", "").strip():
+            raise RuntimeError("SECRET_KEY must be configured in Render before exposing Loto Lab.")
     initialize_database()
 
 
