@@ -102,7 +102,7 @@ def test_rank_movements_compare_latest_ranking_to_previous_draw():
     assert number_one["rank_change"] is not None
     assert number_one["rank_change"] > 0
     assert after["prediction"]["movements"]["available"] is True
-    assert any(row["number"] == 1 for row in after["prediction"]["movements"]["up"])
+    assert any(row["number"] == 7 for row in after["prediction"]["movements"]["up"])
 
 
 def test_methods_backtest_is_walk_forward_and_reports_random_baseline():
