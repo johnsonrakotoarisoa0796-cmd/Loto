@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -83,7 +83,7 @@ def test_recent_and_global_frequency_methods_can_react_differently():
     rows = [[1, 2, 3, 4, 5] for _ in range(25)]
     rows.extend([[6, 7, 8, 9, 10] for _ in range(5)])
     models = analyze_draws(as_dict([
-        (date(2026, 1, 1) + __import__("datetime").timedelta(days=i), row)
+        (date(2026, 1, 1) + timedelta(days=i), row)
         for i, row in enumerate(rows)
     ]))["prediction"]["models"]
     frequency = next(model for model in models if model["id"] == "frequency")
@@ -94,9 +94,8 @@ def test_recent_and_global_frequency_methods_can_react_differently():
 
 def test_rank_movements_compare_latest_ranking_to_previous_draw():
     rows = [[2, 3, 4, 5, 6] for _ in range(10)]
-    before = analyze_draws(as_dict())
     after = analyze_draws(as_dict([
-        (date(2026, 1, 1) + __import__("datetime").timedelta(days=i), row)
+        (date(2026, 1, 1) + timedelta(days=i), row)
         for i, row in enumerate(rows + [[1, 7, 8, 9, 10]])
     ]))
     number_one = next(row for row in after["prediction"]["ranked"] if row["number"] == 1)
@@ -109,7 +108,7 @@ def test_rank_movements_compare_latest_ranking_to_previous_draw():
 def test_methods_backtest_is_walk_forward_and_reports_random_baseline():
     rows = [[(i + j) % 35 + 1 for j in range(5)] for i in range(40)]
     result = analyze_draws(as_dict([
-        (date(2026, 1, 1) + __import__("datetime").timedelta(days=i), row)
+        (date(2026, 1, 1) + timedelta(days=i), row)
         for i, row in enumerate(rows)
     ]))
     comparison = result["backtest"]["methods_comparison"]
@@ -125,7 +124,7 @@ def test_methods_backtest_is_walk_forward_and_reports_random_baseline():
 def test_methods_backtest_waits_until_one_draw_after_training():
     rows = [[1, 2, 3, 4, 5] for _ in range(30)]
     result = analyze_draws(as_dict([
-        (date(2026, 1, 1) + __import__("datetime").timedelta(days=i), row)
+        (date(2026, 1, 1) + timedelta(days=i), row)
         for i, row in enumerate(rows)
     ]))
     comparison = result["backtest"]["methods_comparison"]
