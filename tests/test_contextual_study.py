@@ -31,11 +31,29 @@ def test_lunar_context_is_bounded_and_has_phase_label():
     assert result["moon_phase"] in study.MOON_PHASES
 
 
-def test_study_without_coordinates_still_returns_astrology_and_astronomy(monkeypatch):
+def test_default_location_is_explicitly_approximate_and_keeps_study_local(monkeypatch):
     monkeypatch.delenv("DRAW_LOCATION_LAT", raising=False)
     monkeypatch.delenv("DRAW_LOCATION_LON", raising=False)
+    monkeypatch.delenv("DRAW_LOCATION_NAME", raising=False)
+    monkeypatch.delenv("DRAW_TIMEZONE", raising=False)
+    monkeypatch.setattr(
+        study,
+        "_external_context",
+        lambda start, end, location: (
+            {"weather_available": False, "seismic_available": False,
+             "weather_error": None, "seismic_error": None},
+            [],
+        ),
+    )
     result = study.build_contextual_study(_draws(7))
-    assert result["meta"]["location_configured"] is False
+    assert result["meta"]["location_configured"] is True
+    assert result["meta"]["location_is_estimate"] is True
+    assert result["meta"]["location_name"] == "Antaninarenina, Antananarivo (approximatif)"
+    assert result["meta"]["latitude"] == pytest.approx(-18.9103)
+    assert result["meta"]["longitude"] == pytest.approx(47.52502)
+    assert result["meta"]["timezone"] == "Indian/Antananarivo"
+    assert result["meta"]["draw_time"] == "16:35"
+    assert result["meta"]["timezone_assumed_utc"] is False
     assert result["meta"]["draw_count"] == 7
     assert len(result["rows"]) == 7
     assert all(row["zodiac_sign"] for row in result["rows"])
@@ -117,8 +135,15 @@ def test_correlations_are_suppressed_when_the_predictor_is_constant():
 
 
 def test_study_marks_small_sample_as_exploratory_or_insufficient(monkeypatch):
-    monkeypatch.delenv("DRAW_LOCATION_LAT", raising=False)
-    monkeypatch.delenv("DRAW_LOCATION_LON", raising=False)
+    monkeypatch.setattr(
+        study,
+        "_external_context",
+        lambda start, end, location: (
+            {"weather_available": False, "seismic_available": False,
+             "weather_error": None, "seismic_error": None},
+            [],
+        ),
+    )
     result = study.build_contextual_study(_draws(29))
     assert result["meta"]["sample_level"] == "insufficient"
     assert result["correlations"]["tests_count"] == 0
@@ -140,12 +165,25 @@ def test_lunar_phase_uses_official_draw_time_and_local_timezone():
     assert result["timezone_assumed_utc"] is False
 
 
-def test_draw_time_defaults_to_1635_and_flags_missing_timezone(monkeypatch):
+def test_draw_time_defaults_to_1635_in_madagascar_timezone(monkeypatch):
     monkeypatch.delenv("DRAW_TIME", raising=False)
     monkeypatch.delenv("DRAW_TIMEZONE", raising=False)
     draw_time, timezone_name = study._draw_time_config()
     assert draw_time.isoformat(timespec="minutes") == "16:35"
-    assert timezone_name == "auto"
+    assert timezone_name == "Indian/Antananarivo"
     result = study.lunar_context(date(2026, 11, 18), draw_time, timezone_name)
     assert result["reference_time_local"] == "16:35"
-    assert result["timezone_assumed_utc"] is True
+    assert result["reference_time_utc"] == "2026-11-18T13:35+00:00"
+    assert result["timezone_assumed_utc"] is False
+
+def test_custom_coordinates_override_provisional_default(monkeypatch):
+    monkeypatch.setenv("DRAW_LOCATION_LAT", "-18.8792")
+    monkeypatch.setenv("DRAW_LOCATION_LON", "47.5079")
+    monkeypatch.setenv("DRAW_LOCATION_NAME", "Antananarivo - lieu confirmé")
+    location = study._location_config()
+    assert location["configured"] is True
+    assert location["location_is_estimate"] is False
+    assert location["latitude"] == pytest.approx(-18.8792)
+    assert location["longitude"] == pytest.approx(47.5079)
+    assert location["name"] == "Antananarivo - lieu confirmé"
+
