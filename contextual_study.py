@@ -154,7 +154,12 @@ def _location_config() -> dict[str, Any]:
             "timezone": timezone_name,
         }
     if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
-        return {"configured": False, "reason": "Coordonnées géographiques hors limites."}
+        return {
+            "configured": False,
+            "reason": "Coordonnées géographiques hors limites.",
+            "draw_time": draw_time.isoformat(timespec="minutes"),
+            "timezone": timezone_name,
+        }
     try:
         radius = float(os.getenv("SEISMIC_RADIUS_KM", "200"))
     except ValueError:
