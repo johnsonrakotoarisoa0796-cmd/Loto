@@ -253,20 +253,26 @@ def _fetch_json(url: str, timeout: float = 20.0) -> dict[str, Any]:
 def _fetch_weather(
     start_date: date, end_date: date, location: dict[str, Any]
 ) -> dict[str, dict[str, Any]]:
+    """Combine daily historical reanalysis with archived pre-draw forecast snapshots.
+
+    Daily summaries are useful for descriptive charts. The contextual prediction
+    model specifically consumes the archived forecast at 16:00 local time, so
+    its training inputs better match the information available before the draw.
+    """
     draw_time = datetime_time.fromisoformat(location.get("draw_time", "16:35"))
     reference_hour = draw_time.replace(minute=0, second=0, microsecond=0).isoformat(timespec="minutes")
-    params = {
+
+    daily_params = {
         "latitude": location["latitude"],
         "longitude": location["longitude"],
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
         "daily": ",".join(WEATHER_FIELDS),
-        "hourly": ",".join(HOURLY_WEATHER_FIELDS),
         "timezone": location["timezone"],
     }
-    url = "https://archive-api.open-meteo.com/v1/archive?" + urllib.parse.urlencode(params)
-    payload = _fetch_json(url)
-    daily = payload.get("daily") or {}
+    daily_url = "https://archive-api.open-meteo.com/v1/archive?" + urllib.parse.urlencode(daily_params)
+    daily_payload = _fetch_json(daily_url)
+    daily = daily_payload.get("daily") or {}
     dates = daily.get("time") or []
     by_date: dict[str, dict[str, Any]] = {}
     for index, day in enumerate(dates):
@@ -277,9 +283,23 @@ def _fetch_weather(
             item[field] = value
         by_date[day] = item
 
-    # Use the hourly value at 16:00 local as a no-look-ahead proxy for a 16:35 draw.
-    # Hourly precipitation covers the preceding hour; daily summaries remain available too.
-    hourly = payload.get("hourly") or {}
+    # Same forecast models and response format as the live Forecast API,
+    # archived historically from 2022 onward.
+    forecast_params = {
+        "latitude": location["latitude"],
+        "longitude": location["longitude"],
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "hourly": ",".join(HOURLY_WEATHER_FIELDS),
+        "timezone": location["timezone"],
+        "wind_speed_unit": "kmh",
+    }
+    forecast_url = (
+        "https://historical-forecast-api.open-meteo.com/v1/forecast?"
+        + urllib.parse.urlencode(forecast_params)
+    )
+    forecast_payload = _fetch_json(forecast_url)
+    hourly = forecast_payload.get("hourly") or {}
     hourly_times = hourly.get("time") or []
     for index, timestamp in enumerate(hourly_times):
         try:
@@ -294,6 +314,7 @@ def _fetch_weather(
             values = hourly.get(field) or []
             item[f"{field}_at_draw_hour"] = values[index] if index < len(values) else None
         item["weather_reference_hour_local"] = reference_hour
+        item["weather_context_source"] = "Open-Meteo Historical Forecast API"
     return by_date
 
 
