@@ -439,7 +439,12 @@
         reason: "Impossible de charger le modèle contextuel : " + error.message,
         backtest: { available: false, reason: error.message }
       };
-      if (state.analysis) renderPrediction();
+      if (state.analysis) {
+        if (state.basePrediction) {
+          state.analysis.prediction = { ...state.basePrediction, contextual_model: state.contextualPrediction };
+        }
+        renderPrediction();
+      }
       toast("Modèle contextuel indisponible : " + error.message, true);
       return false;
     } finally {
