@@ -20,5 +20,19 @@ services:
         sync: false
       - key: COOKIE_SECURE
         value: "true"
+      # Loto 5/35 Bet261: lieu public indiqué à Antaninarenina.
+      # Coordonnées approximatives du quartier, remplaçables après confirmation du site.
       - key: DRAW_TIME
         value: "16:35"
+      - key: DRAW_TIMEZONE
+        value: "Indian/Antananarivo"
+      - key: DRAW_LOCATION_NAME
+        value: "Antaninarenina, Antananarivo (approximatif)"
+      - key: DRAW_LOCATION_LAT
+        value: "-18.9103"
+      - key: DRAW_LOCATION_LON
+        value: "47.52502"
+      - key: SEISMIC_RADIUS_KM
+        value: "200"
+      - key: SEISMIC_MIN_MAGNITUDE
+        value: "2.5"
