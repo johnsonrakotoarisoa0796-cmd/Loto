@@ -291,12 +291,18 @@
       ? "Rayon : " + numberFmt.format(meta.seismic_radius_km) + " km · magnitude ≥ " + numberFmt.format(meta.seismic_min_magnitude)
       : "Événements autour du lieu du tirage";
 
+    const timeNotice = meta.timezone_assumed_utc
+      ? " L'heure " + (meta.draw_time || "16:35") + " est provisoirement interprétée en UTC : configure DRAW_TIMEZONE avec le fuseau réel du lieu pour calculer la Lune à l'instant local exact."
+      : " Référence horaire : " + (meta.draw_time || "16:35") + " (" + (meta.timezone || "fuseau configuré") + ").";
     if (!meta.location_configured) {
       configWarning.hidden = false;
-      configWarning.textContent = "Pour obtenir les données météorologiques et sismiques locales, ajoute dans Render > Environment les variables DRAW_LOCATION_LAT et DRAW_LOCATION_LON du lieu réel du tirage. Tu peux aussi préciser DRAW_LOCATION_NAME, DRAW_TIMEZONE, SEISMIC_RADIUS_KM (défaut 200 km) et SEISMIC_MIN_MAGNITUDE (défaut 2,5). Les cycles lunaires et les signes symboliques sont déjà calculés.";
+      configWarning.textContent = "Pour obtenir les données météorologiques et sismiques locales, ajoute dans Render > Environment les variables DRAW_LOCATION_LAT et DRAW_LOCATION_LON du lieu réel du tirage. Tu peux aussi préciser DRAW_LOCATION_NAME, DRAW_TIME (défaut 16:35), DRAW_TIMEZONE, SEISMIC_RADIUS_KM (défaut 200 km) et SEISMIC_MIN_MAGNITUDE (défaut 2,5). Les cycles lunaires et les signes symboliques sont déjà calculés." + timeNotice;
     } else if (meta.weather_error || meta.seismic_error) {
       configWarning.hidden = false;
-      configWarning.textContent = [meta.weather_error, meta.seismic_error].filter(Boolean).join(" ");
+      configWarning.textContent = [meta.weather_error, meta.seismic_error].filter(Boolean).join(" ") + timeNotice;
+    } else if (meta.timezone_assumed_utc) {
+      configWarning.hidden = false;
+      configWarning.textContent = timeNotice.trim();
     } else {
       configWarning.hidden = true;
       configWarning.textContent = "";
@@ -327,7 +333,7 @@
       const weather = (value, suffix = "") => value == null ? "—" :
         Number(value).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + suffix;
       const seismicCount = row.earthquake_count == null ? "—" : row.earthquake_count;
-      return '<tr><td>' + formatDate(row.date) + '</td>' +
+      return '<tr><td>' + formatDate(row.date) + '<small>' + escapeHtml(row.reference_time_local || meta.draw_time || "16:35") + '</small></td>' +
         '<td><strong>' + escapeHtml(row.zodiac_sign) + '</strong><small>' + escapeHtml(row.moon_phase) +
         ' · ' + Math.round((row.moon_illumination || 0) * 100) + '%</small></td>' +
         '<td>' + weather(row.temperature_2m_mean, "°") + '</td>' +
