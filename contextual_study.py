@@ -18,6 +18,7 @@ import urllib.request
 from collections import defaultdict
 from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from typing import Any, Iterable
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 SYNODIC_MONTH_DAYS = 29.530588853
 NEW_MOON_EPOCH = datetime(2000, 1, 6, 18, 14, tzinfo=timezone.utc)
@@ -104,8 +105,14 @@ def _location_config() -> dict[str, Any]:
         return {"configured": False, "reason": "Les coordonnées configurées ne sont pas numériques."}
     if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
         return {"configured": False, "reason": "Coordonnées géographiques hors limites."}
-    radius = float(os.getenv("SEISMIC_RADIUS_KM", "200"))
-    min_magnitude = float(os.getenv("SEISMIC_MIN_MAGNITUDE", "2.5"))
+    try:
+        radius = float(os.getenv("SEISMIC_RADIUS_KM", "200"))
+    except ValueError:
+        radius = 200.0
+    try:
+        min_magnitude = float(os.getenv("SEISMIC_MIN_MAGNITUDE", "2.5"))
+    except ValueError:
+        min_magnitude = 2.5
     if not 10 <= radius <= 20000:
         radius = 200.0
     if not 0 <= min_magnitude <= 9:
@@ -182,11 +189,19 @@ def _fetch_seismic(
     start_date: date, end_date: date, location: dict[str, Any]
 ) -> dict[str, dict[str, Any]]:
     events_by_date: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    timezone_name = location.get("timezone", "auto")
+    try:
+        local_timezone = ZoneInfo(timezone_name) if timezone_name != "auto" else timezone.utc
+    except ZoneInfoNotFoundError:
+        local_timezone = timezone.utc
+    seen_event_keys: set[str] = set()
     for chunk_start, chunk_end in _date_chunks(start_date, end_date):
         params = {
             "format": "geojson",
-            "starttime": chunk_start.isoformat(),
-            "endtime": (chunk_end + timedelta(days=1)).isoformat(),
+            # Include a margin so UTC catalogue events can be assigned to a local
+            # draw date even when the configured time zone is not UTC.
+            "starttime": (chunk_start - timedelta(days=1)).isoformat(),
+            "endtime": (chunk_end + timedelta(days=2)).isoformat(),
             "latitude": location["latitude"],
             "longitude": location["longitude"],
             "maxradiuskm": location["seismic_radius_km"],
@@ -203,7 +218,13 @@ def _fetch_seismic(
                 continue
             longitude, latitude, depth = coordinates[:3]
             event_time = datetime.fromtimestamp(properties["time"] / 1000, tz=timezone.utc)
-            event_day = event_time.date().isoformat()
+            event_day = event_time.astimezone(local_timezone).date().isoformat()
+            event_key = str(feature.get("id") or f"{event_time.isoformat()}:{latitude}:{longitude}")
+            if event_key in seen_event_keys:
+                continue
+            seen_event_keys.add(event_key)
+            if not start_date.isoformat() <= event_day <= end_date.isoformat():
+                continue
             distance = _haversine_km(
                 location["latitude"], location["longitude"], float(latitude), float(longitude)
             )
@@ -532,7 +553,7 @@ def build_contextual_study(raw_draws: Iterable[dict[str, Any]]) -> dict[str, Any
             "astrology": "Signe solaire tropical calculé à partir de la date ; information symbolique, non validée comme facteur prédictif.",
             "astronomy": "Phase et éclairement lunaires approximatifs à 12:00 UTC, calculés avec un mois synodique moyen.",
             "weather": "Valeurs quotidiennes historiques de réanalyse Open-Meteo ; elles ne sont pas nécessairement des mesures locales au point exact.",
-            "seismic": "Catalogue d'événements sismiques USGS dans le rayon configuré ; ce ne sont pas des mesures de forme d'onde ou d'accélération du sol à l'endroit du tirage.",
+            "seismic": "Catalogue d'événements sismiques USGS dans le rayon configuré ; les horodatages sont ramenés au fuseau DRAW_TIMEZONE si celui-ci est configuré. Ce ne sont pas des mesures de forme d'onde ou d'accélération du sol à l'endroit du tirage.",
             "prediction_policy": "Aucune variable externe n'entre dans les scores ou les combinaisons de prédiction.",
         },
         "correlations": correlations,
