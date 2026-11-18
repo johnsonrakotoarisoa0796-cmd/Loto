@@ -165,6 +165,7 @@ Le classement combine les fréquences historiques et une composante récente plu
 ├── analysis_engine.py       # Statistiques descriptives et classement exploratoire
 ├── scientific_engine.py     # Audit scientifique et validation hors échantillon
 ├── contextual_study.py      # Astrologie symbolique, Lune, météo et catalogue sismique
+├── contextual_predictor.py  # Modèle contextuel pondéré et validation chronologique
 ├── app/
 │   ├── database.py          # SQLAlchemy / SQLite / PostgreSQL
 │   ├── main.py              # API FastAPI, import/export, authentification
