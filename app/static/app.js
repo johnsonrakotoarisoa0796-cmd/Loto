@@ -394,10 +394,10 @@
   }
 
   async function loadContextualPrediction(force = false) {
-    if (state.contextualPredictionLoading) return;
+    if (state.contextualPredictionLoading) return false;
     if (state.contextualPrediction && !force) {
       renderPrediction();
-      return;
+      return true;
     }
     state.contextualPredictionLoading = true;
     if (state.analysis) renderPrediction();
@@ -426,9 +426,12 @@
           prediction.alternatives = prediction.models.filter((item) => item.id !== "contextual").map((item) => item.numbers);
         } else {
           prediction.models = baseModels;
+          prediction.numbers = baseModels.find((item) => item.id === "hybrid")?.numbers || prediction.numbers;
+          prediction.ranked = state.analysis.prediction.ranked;
         }
         renderPrediction();
       }
+      return true;
     } catch (error) {
       state.contextualPrediction = {
         ready: false,
@@ -437,6 +440,7 @@
       };
       if (state.analysis) renderPrediction();
       toast("Modèle contextuel indisponible : " + error.message, true);
+      return false;
     } finally {
       state.contextualPredictionLoading = false;
     }
@@ -591,8 +595,8 @@
     if ($("#contextual-prediction-refresh")) $("#contextual-prediction-refresh").addEventListener("click", async (event) => {
       const button = event.currentTarget;
       button.disabled = true;
-      try { await loadContextualPrediction(true); toast("Modèle contextuel actualisé."); }
-      catch (error) { toast("Actualisation impossible : " + error.message, true); }
+      const refreshed = await loadContextualPrediction(true);
+      if (refreshed) toast("Modèle contextuel actualisé.");
       finally { button.disabled = false; }
     });
     if ($("#logout-button")) {
