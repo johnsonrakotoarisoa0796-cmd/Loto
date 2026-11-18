@@ -32,6 +32,8 @@ services:
         value: "-18.9103"
       - key: DRAW_LOCATION_LON
         value: "47.52502"
+      - key: DRAW_LOCATION_IS_ESTIMATE
+        value: "true"
       - key: SEISMIC_RADIUS_KM
         value: "200"
       - key: SEISMIC_MIN_MAGNITUDE
