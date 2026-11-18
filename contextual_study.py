@@ -78,9 +78,44 @@ def zodiac_sign(draw_date: date) -> str:
     return "Capricorne"
 
 
-def lunar_context(draw_date: date) -> dict[str, Any]:
-    """Approximate geocentric lunar phase at 12:00 UTC on the draw date."""
-    moment = datetime.combine(draw_date, datetime_time(12), tzinfo=timezone.utc)
+def _draw_time_config() -> tuple[datetime_time, str]:
+    raw_time = os.getenv("DRAW_TIME", "16:35").strip() or "16:35"
+    try:
+        draw_time = datetime_time.fromisoformat(raw_time)
+    except ValueError:
+        draw_time = datetime_time(16, 35)
+    timezone_name = os.getenv("DRAW_TIMEZONE", "auto").strip() or "auto"
+    return draw_time.replace(second=0, microsecond=0), timezone_name
+
+
+def lunar_context(
+    draw_date: date,
+    draw_time: datetime_time | str | None = None,
+    timezone_name: str = "auto",
+) -> dict[str, Any]:
+    """Approximate lunar phase at the official local draw time.
+
+    If no IANA time zone is configured, the clock is interpreted as UTC and
+    the API explicitly marks this assumption instead of guessing the draw site.
+    """
+    if draw_time is None:
+        draw_time, default_zone = _draw_time_config()
+        if timezone_name == "auto":
+            timezone_name = default_zone
+    elif isinstance(draw_time, str):
+        draw_time = datetime_time.fromisoformat(draw_time)
+
+    local_moment = datetime.combine(draw_date, draw_time.replace(tzinfo=None))
+    timezone_assumed = timezone_name == "auto"
+    if timezone_assumed:
+        local_moment = local_moment.replace(tzinfo=timezone.utc)
+    else:
+        try:
+            local_moment = local_moment.replace(tzinfo=ZoneInfo(timezone_name))
+        except ZoneInfoNotFoundError:
+            local_moment = local_moment.replace(tzinfo=timezone.utc)
+            timezone_assumed = True
+    moment = local_moment.astimezone(timezone.utc)
     age = ((moment - NEW_MOON_EPOCH).total_seconds() / 86400) % SYNODIC_MONTH_DAYS
     phase = age / SYNODIC_MONTH_DAYS
     illumination = (1 - math.cos(2 * math.pi * phase)) / 2
@@ -90,19 +125,34 @@ def lunar_context(draw_date: date) -> dict[str, Any]:
         "moon_phase_fraction": round(phase, 4),
         "moon_illumination": round(illumination, 4),
         "moon_phase": MOON_PHASES[phase_index],
+        "reference_time_local": draw_time.isoformat(timespec="minutes"),
+        "reference_timezone": timezone_name,
+        "reference_time_utc": moment.isoformat(timespec="minutes"),
+        "timezone_assumed_utc": timezone_assumed,
     }
 
 
 def _location_config() -> dict[str, Any]:
+    draw_time, timezone_name = _draw_time_config()
     raw_lat = os.getenv("DRAW_LOCATION_LAT", "").strip()
     raw_lon = os.getenv("DRAW_LOCATION_LON", "").strip()
     if not raw_lat or not raw_lon:
-        return {"configured": False, "reason": "Coordonnées du lieu du tirage non configurées."}
+        return {
+            "configured": False,
+            "reason": "Coordonnées du lieu du tirage non configurées.",
+            "draw_time": draw_time.isoformat(timespec="minutes"),
+            "timezone": timezone_name,
+        }
     try:
         latitude = float(raw_lat)
         longitude = float(raw_lon)
     except ValueError:
-        return {"configured": False, "reason": "Les coordonnées configurées ne sont pas numériques."}
+        return {
+            "configured": False,
+            "reason": "Les coordonnées configurées ne sont pas numériques.",
+            "draw_time": draw_time.isoformat(timespec="minutes"),
+            "timezone": timezone_name,
+        }
     if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
         return {"configured": False, "reason": "Coordonnées géographiques hors limites."}
     try:
@@ -122,7 +172,8 @@ def _location_config() -> dict[str, Any]:
         "latitude": latitude,
         "longitude": longitude,
         "name": os.getenv("DRAW_LOCATION_NAME", "Lieu du tirage").strip() or "Lieu du tirage",
-        "timezone": os.getenv("DRAW_TIMEZONE", "auto").strip() or "auto",
+        "timezone": timezone_name,
+        "draw_time": draw_time.isoformat(timespec="minutes"),
         "seismic_radius_km": radius,
         "seismic_min_magnitude": min_magnitude,
     }
@@ -472,7 +523,11 @@ def build_contextual_study(raw_draws: Iterable[dict[str, Any]]) -> dict[str, Any
     previous_numbers: set[int] | None = None
     for draw in draws:
         numbers = draw["numbers"]
-        astro = lunar_context(draw["date"])
+        astro = lunar_context(
+            draw["date"],
+            location["draw_time"],
+            location["timezone"],
+        )
         rows.append({
             "date": draw["date"].isoformat(),
             "numbers": numbers,
@@ -549,13 +604,15 @@ def build_contextual_study(raw_draws: Iterable[dict[str, Any]]) -> dict[str, Any
             "latitude": location.get("latitude"),
             "longitude": location.get("longitude"),
             "timezone": location.get("timezone"),
+            "draw_time": location.get("draw_time", "16:35"),
+            "timezone_assumed_utc": location.get("timezone", "auto") == "auto",
             "seismic_radius_km": location.get("seismic_radius_km"),
             "seismic_min_magnitude": location.get("seismic_min_magnitude"),
             **source_status,
         },
         "methodology": {
             "astrology": "Signe solaire tropical calculé à partir de la date ; information symbolique, non validée comme facteur prédictif.",
-            "astronomy": "Phase et éclairement lunaires approximatifs à 12:00 UTC, calculés avec un mois synodique moyen.",
+            "astronomy": "Phase et éclairement lunaires approximatifs calculés au moment de référence local du tirage, avec conversion en UTC via DRAW_TIMEZONE ; si le fuseau n'est pas configuré, l'heure est interprétée comme UTC et cette hypothèse est signalée.",
             "weather": "Valeurs quotidiennes historiques de réanalyse Open-Meteo ; elles ne sont pas nécessairement des mesures locales au point exact.",
             "seismic": "Catalogue d'événements sismiques USGS dans le rayon configuré ; les horodatages sont ramenés au fuseau DRAW_TIMEZONE si celui-ci est configuré. Ce ne sont pas des mesures de forme d'onde ou d'accélération du sol à l'endroit du tirage.",
             "prediction_policy": "Aucune variable externe n'entre dans les scores ou les combinaisons de prédiction.",
