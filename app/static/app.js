@@ -257,6 +257,115 @@
     ).join("") : '<tr><td colspan="5" class="empty-cell">Enregistre ton premier pronostic pour commencer à mesurer le modèle.</td></tr>';
   }
 
+
+  function renderContextualGroups(rows, selector) {
+    const node = $(selector);
+    if (!rows || !rows.length) {
+      node.innerHTML = '<tr><td colspan="4" class="empty-cell">Aucune donnée disponible pour le moment.</td></tr>';
+      return;
+    }
+    node.innerHTML = rows.map((row) =>
+      '<tr><td>' + escapeHtml(row.label) + '</td><td>' + row.draw_count + '</td>' +
+      '<td>' + numberFmt.format(row.average_draw_sum) + '</td><td>' +
+      numberFmt.format(row.average_odd_count) + '</td></tr>'
+    ).join("");
+  }
+
+  function renderContextualStudy(data) {
+    const meta = data.meta || {};
+    const configWarning = $("#context-config-warning");
+    $("#context-sample-count").textContent = numberFmt.format(meta.draw_count || 0);
+    $("#context-sample-level").textContent = meta.sample_level === "monitoring"
+      ? "Suivi élargi · interprétation prudente"
+      : meta.sample_level === "exploratory"
+        ? "Étude exploratoire · échantillon limité"
+        : "Échantillon insuffisant pour conclure";
+    $("#context-weather-status").textContent = !meta.location_configured
+      ? "À configurer"
+      : meta.weather_available ? "Disponible" : "Indisponible";
+    $("#context-seismic-status").textContent = !meta.location_configured
+      ? "À configurer"
+      : meta.seismic_available ? "Disponible" : "Indisponible";
+    $("#context-location").textContent = meta.location_name || "Non configuré";
+    $("#context-seismic-radius").textContent = meta.seismic_radius_km
+      ? "Rayon : " + numberFmt.format(meta.seismic_radius_km) + " km · magnitude ≥ " + numberFmt.format(meta.seismic_min_magnitude)
+      : "Événements autour du lieu du tirage";
+
+    if (!meta.location_configured) {
+      configWarning.hidden = false;
+      configWarning.textContent = "Pour obtenir les données météorologiques et sismiques locales, ajoute dans Render > Environment les variables DRAW_LOCATION_LAT et DRAW_LOCATION_LON du lieu réel du tirage. Tu peux aussi préciser DRAW_LOCATION_NAME, DRAW_TIMEZONE, SEISMIC_RADIUS_KM (défaut 200 km) et SEISMIC_MIN_MAGNITUDE (défaut 2,5). Les cycles lunaires et les signes symboliques sont déjà calculés.";
+    } else if (meta.weather_error || meta.seismic_error) {
+      configWarning.hidden = false;
+      configWarning.textContent = [meta.weather_error, meta.seismic_error].filter(Boolean).join(" ");
+    } else {
+      configWarning.hidden = true;
+      configWarning.textContent = "";
+    }
+
+    const correlations = data.correlations || {};
+    $("#context-test-count").textContent = (correlations.tests_count || 0) + " TEST" + ((correlations.tests_count || 0) > 1 ? "S" : "");
+    $("#context-correlation-method").textContent = (correlations.method || "") + " " + (meta.sample_note || "");
+    const results = correlations.results || [];
+    $("#context-correlation-body").innerHTML = results.length ? results.map((row) => {
+      const isMarked = row.p_adjusted != null && row.p_adjusted <= 0.05;
+      return '<tr><td><strong>' + escapeHtml(row.factor_label) + '</strong></td>' +
+        '<td>' + escapeHtml(row.outcome_label) + '</td><td>' + row.sample_size + '</td>' +
+        '<td>' + Number(row.spearman_rho).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + '</td>' +
+        '<td>' + (row.p_adjusted == null ? "—" : Number(row.p_adjusted).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })) + '</td>' +
+        '<td><span class="context-result-label ' + (isMarked ? "context-replicate" : "context-neutral") + '">' +
+          (isMarked ? "À répliquer" : "Non concluant") + '</span></td></tr>';
+    }).join("") : '<tr><td colspan="6" class="empty-cell">' +
+      (meta.draw_count < 30 ? "Il faut au moins 30 tirages pour lancer les tests exploratoires." :
+        "Aucune corrélation calculable : vérifie les données météo et les coordonnées du lieu.") +
+      '</td></tr>';
+
+    renderContextualGroups(data.zodiac_groups || [], "#context-zodiac-body");
+    renderContextualGroups(data.moon_groups || [], "#context-moon-body");
+
+    const rows = data.rows || [];
+    $("#context-history-body").innerHTML = rows.length ? rows.map((row) => {
+      const weather = (value, suffix = "") => value == null ? "—" :
+        Number(value).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + suffix;
+      const seismicCount = row.earthquake_count == null ? "—" : row.earthquake_count;
+      return '<tr><td>' + formatDate(row.date) + '</td>' +
+        '<td><strong>' + escapeHtml(row.zodiac_sign) + '</strong><small>' + escapeHtml(row.moon_phase) +
+        ' · ' + Math.round((row.moon_illumination || 0) * 100) + '%</small></td>' +
+        '<td>' + weather(row.temperature_2m_mean, "°") + '</td>' +
+        '<td>' + weather(row.precipitation_sum, " mm") + '</td>' +
+        '<td>' + weather(row.pressure_msl_mean, " hPa") + '</td>' +
+        '<td>' + seismicCount + '</td>' +
+        '<td>' + weather(row.max_magnitude) + '</td>' +
+        '<td><strong>' + row.draw_sum + '</strong></td></tr>';
+    }).join("") : '<tr><td colspan="8" class="empty-cell">Aucun tirage enregistré.</td></tr>';
+
+    $("#context-methodology-note").textContent = [
+      data.methodology && data.methodology.astrology,
+      data.methodology && data.methodology.astronomy,
+      data.methodology && data.methodology.seismic,
+      data.methodology && data.methodology.prediction_policy
+    ].filter(Boolean).join(" ");
+  }
+
+  async function loadContextualStudy(force = false) {
+    if (state.contextualLoading) return;
+    if (state.contextualStudy && !force) {
+      renderContextualStudy(state.contextualStudy);
+      return;
+    }
+    state.contextualLoading = true;
+    $("#context-correlation-body").innerHTML = '<tr><td colspan="6" class="empty-cell">Récupération des archives météo et du catalogue sismique…</td></tr>';
+    try {
+      const result = await api("/api/contextual-study");
+      state.contextualStudy = result;
+      renderContextualStudy(result);
+    } catch (error) {
+      $("#context-correlation-body").innerHTML = '<tr><td colspan="6" class="empty-cell">' + escapeHtml(error.message) + '</td></tr>';
+      toast("Impossible de charger le laboratoire externe : " + error.message, true);
+    } finally {
+      state.contextualLoading = false;
+    }
+  }
+
   function renderAll() {
     renderOverview();
     renderHistory();
@@ -380,6 +489,7 @@
     $("#import-trigger").addEventListener("click", () => $("#csv-file").click());
     $("#csv-file").addEventListener("change", (event) => importFile(event.target.files[0]));
     $("#save-prediction").addEventListener("click", recordPrediction);
+    if ($("#context-refresh")) $("#context-refresh").addEventListener("click", () => loadContextualStudy(true));
     if ($("#logout-button")) {
       $("#logout-button").addEventListener("click", async () => {
         try { await api("/logout", { method: "POST" }); window.location.href = "/login"; }
@@ -387,7 +497,7 @@
       });
     }
     const initialView = location.hash.slice(1);
-    if (["overview", "history", "analysis", "prediction"].includes(initialView)) switchView(initialView);
+    if (["overview", "history", "analysis", "prediction", "environment"].includes(initialView)) switchView(initialView);
   }
 
   document.addEventListener("DOMContentLoaded", () => {
