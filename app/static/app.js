@@ -402,7 +402,7 @@
     state.contextualPredictionLoading = true;
     if (state.analysis) renderPrediction();
     try {
-      const result = await api("/api/contextual-prediction");
+      const result = await api("/api/contextual-prediction" + (force ? "?refresh=1" : ""));
       state.contextualPrediction = result;
       if (state.analysis) {
         const prediction = state.analysis.prediction;
