@@ -494,7 +494,9 @@ def _fetch_seismic(
                 "place": properties.get("place"),
                 "url": properties.get("url"),
             }
-            for draw_day in (event_day, event_day + timedelta(days=1)):
+            # A forecast snapshot may be taken up to 24 hours before the draw.
+            # Its 24-hour observation window can therefore begin two local dates earlier.
+            for draw_day in (event_day, event_day + timedelta(days=1), event_day + timedelta(days=2)):
                 if not start_date <= draw_day <= end_date:
                     continue
                 cutoff_local = (
