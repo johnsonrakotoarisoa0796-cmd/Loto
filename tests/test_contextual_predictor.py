@@ -97,3 +97,14 @@ def test_same_context_has_zero_distance_and_different_context_is_separated():
     distance = predictor._context_distance(first, second, scales)
     assert distance is not None
     assert distance > 0
+
+def test_context_backtest_compares_contextual_model_and_historical_baseline():
+    draws, contexts = _rows(42)
+    result = predictor._context_backtest(draws, contexts, 200.0)
+    assert result["available"] is True
+    assert result["tested_draws"] == 12
+    assert result["contextual_average_hits"] >= 0
+    assert result["baseline_average_hits"] >= 0
+    assert result["expected_hits"] == pytest.approx(25 / 35)
+    assert result["sample_level"] == "short"
+
