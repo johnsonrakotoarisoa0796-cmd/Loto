@@ -377,7 +377,11 @@ def _cache_key(draws: list[dict[str, Any]]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def build_contextual_prediction(raw_draws: Iterable[dict[str, Any]]) -> dict[str, Any]:
+def build_contextual_prediction(
+    raw_draws: Iterable[dict[str, Any]],
+    *,
+    force_refresh: bool = False,
+) -> dict[str, Any]:
     """Build an experimental contextual ranking for the next scheduled draw."""
     draws = _clean_draws(raw_draws)
     if len(draws) < MIN_TRAINING_DRAWS:
@@ -404,7 +408,7 @@ def build_contextual_prediction(raw_draws: Iterable[dict[str, Any]]) -> dict[str
     key = _cache_key(draws)
     now_tick = time.monotonic()
     cached = _PREDICTION_CACHE.get(key)
-    if cached and cached[0] > now_tick:
+    if not force_refresh and cached and cached[0] > now_tick:
         return cached[1]
 
     location = _location_config()
