@@ -271,7 +271,10 @@ def _fetch_weather(
         "timezone": location["timezone"],
     }
     daily_url = "https://archive-api.open-meteo.com/v1/archive?" + urllib.parse.urlencode(daily_params)
-    daily_payload = _fetch_json(daily_url)
+    try:
+        daily_payload = _fetch_json(daily_url)
+    except (OSError, ValueError, urllib.error.URLError, TimeoutError):
+        daily_payload = {}
     daily = daily_payload.get("daily") or {}
     dates = daily.get("time") or []
     by_date: dict[str, dict[str, Any]] = {}
@@ -298,7 +301,10 @@ def _fetch_weather(
         "https://historical-forecast-api.open-meteo.com/v1/forecast?"
         + urllib.parse.urlencode(forecast_params)
     )
-    forecast_payload = _fetch_json(forecast_url)
+    try:
+        forecast_payload = _fetch_json(forecast_url)
+    except (OSError, ValueError, urllib.error.URLError, TimeoutError):
+        return by_date
     hourly = forecast_payload.get("hourly") or {}
     hourly_times = hourly.get("time") or []
     for index, timestamp in enumerate(hourly_times):
