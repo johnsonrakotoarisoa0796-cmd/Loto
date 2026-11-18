@@ -746,12 +746,13 @@ def build_contextual_study(
             weather = context.get("weather") or {}
             seismic = context.get("seismic") or {}
             row.update(weather)
+            seismic_data_available = source_status.get("seismic_available", False)
             row.update({
-                "earthquake_count": seismic.get("earthquake_count", 0),
-                "max_magnitude": seismic.get("max_magnitude"),
-                "nearest_distance_km": seismic.get("nearest_distance_km"),
-                "nearest_depth_km": seismic.get("nearest_depth_km"),
-                "seismic_events": seismic.get("events", []),
+                "earthquake_count": seismic.get("earthquake_count", 0) if seismic_data_available else None,
+                "max_magnitude": seismic.get("max_magnitude") if seismic_data_available else None,
+                "nearest_distance_km": seismic.get("nearest_distance_km") if seismic_data_available else None,
+                "nearest_depth_km": seismic.get("nearest_depth_km") if seismic_data_available else None,
+                "seismic_events": seismic.get("events", []) if seismic_data_available else [],
             })
     else:
         for row in rows:
