@@ -331,12 +331,16 @@
         '<td><strong>' + escapeHtml(row.zodiac_sign) + '</strong><small>' + escapeHtml(row.moon_phase) +
         ' · ' + Math.round((row.moon_illumination || 0) * 100) + '%</small></td>' +
         '<td>' + weather(row.temperature_2m_mean, "°") + '</td>' +
+        '<td>' + weather(row.relative_humidity_2m_mean, " %") + '</td>' +
         '<td>' + weather(row.precipitation_sum, " mm") + '</td>' +
         '<td>' + weather(row.pressure_msl_mean, " hPa") + '</td>' +
+        '<td>' + weather(row.wind_speed_10m_max, " km/h") + '</td>' +
         '<td>' + seismicCount + '</td>' +
+        '<td>' + weather(row.nearest_distance_km, " km") + '</td>' +
+        '<td>' + weather(row.nearest_depth_km, " km") + '</td>' +
         '<td>' + weather(row.max_magnitude) + '</td>' +
         '<td><strong>' + row.draw_sum + '</strong></td></tr>';
-    }).join("") : '<tr><td colspan="8" class="empty-cell">Aucun tirage enregistré.</td></tr>';
+    }).join("") : '<tr><td colspan="12" class="empty-cell">Aucun tirage enregistré.</td></tr>';
 
     $("#context-methodology-note").textContent = [
       data.methodology && data.methodology.astrology,
