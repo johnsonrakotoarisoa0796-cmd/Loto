@@ -1,5 +1,5 @@
 (() => {
-  const state = { draws: [], analysis: null, forecastHistory: [], csrf: window.LOTO_CSRF || "", editingId: null };
+  const state = { draws: [], analysis: null, forecastHistory: [], contextualStudy: null, contextualLoading: false, csrf: window.LOTO_CSRF || "", editingId: null };
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const numberFmt = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
@@ -45,7 +45,7 @@
   }
 
   function switchView(view) {
-    const allowed = ["overview", "history", "analysis", "prediction"];
+    const allowed = ["overview", "history", "analysis", "prediction", "environment"];
     if (!allowed.includes(view)) return;
     $$(".page").forEach((page) => page.classList.toggle("active", page.id === `view-${view}`));
     $$(".nav-item").forEach((button) => {
@@ -54,10 +54,11 @@
       if (active) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     });
-    const labels = { overview: "Vue d'ensemble", history: "Historique", analysis: "Analyses statistiques", prediction: "Laboratoire de scores" };
+    const labels = { overview: "Vue d'ensemble", history: "Historique", analysis: "Analyses statistiques", prediction: "Laboratoire de scores", environment: "Climat & cosmos" };
     $("#page-crumb").textContent = labels[view];
     history.replaceState(null, "", `#${view}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
+    if (view === "environment" && !state.contextualStudy && !state.contextualLoading) loadContextualStudy();
   }
 
   function renderOverview() {
