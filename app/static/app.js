@@ -1,5 +1,5 @@
 (() => {
-  const state = { draws: [], analysis: null, forecastHistory: [], contextualStudy: null, contextualLoading: false, contextualPrediction: null, contextualPredictionLoading: false, csrf: window.LOTO_CSRF || "", editingId: null };
+  const state = { draws: [], analysis: null, basePrediction: null, forecastHistory: [], contextualStudy: null, contextualLoading: false, contextualPrediction: null, contextualPredictionLoading: false, csrf: window.LOTO_CSRF || "", editingId: null };
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const numberFmt = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
@@ -405,7 +405,8 @@
       const result = await api("/api/contextual-prediction" + (force ? "?refresh=1" : ""));
       state.contextualPrediction = result;
       if (state.analysis) {
-        const prediction = state.analysis.prediction;
+        const prediction = { ...(state.basePrediction || state.analysis.prediction) };
+        state.analysis.prediction = prediction;
         prediction.contextual_model = result;
         prediction.active_model_id = "hybrid";
         const baseModels = (prediction.models || []).filter((model) => model.id !== "contextual");
@@ -480,6 +481,7 @@
       const [drawData, analysis, forecastData] = await Promise.all([api("/api/draws"), api("/api/analysis"), api("/api/prediction-history")]);
       state.draws = drawData.draws;
       state.analysis = analysis;
+      state.basePrediction = JSON.parse(JSON.stringify(analysis.prediction));
       state.forecastHistory = forecastData.predictions;
       state.contextualPrediction = null;
       renderAll();
