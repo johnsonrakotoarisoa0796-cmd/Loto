@@ -58,20 +58,20 @@ La page **Climat & cosmos** étudie le contexte associé aux dates historiques d
 Pour activer les données météorologiques et sismiques, ajoute au fichier .env local ou à **Render → Environment** les variables suivantes :
 
 ~~~env
-DRAW_LOCATION_NAME=Lieu réel du tirage
-DRAW_LOCATION_LAT=latitude_du_site
-DRAW_LOCATION_LON=longitude_du_site
+DRAW_LOCATION_NAME=Antaninarenina, Antananarivo (approximatif)
+DRAW_LOCATION_LAT=-18.9103
+DRAW_LOCATION_LON=47.52502
 DRAW_TIME=16:35
-DRAW_TIMEZONE=Fuseau_IANA_du_site
+DRAW_TIMEZONE=Indian/Antananarivo
 SEISMIC_RADIUS_KM=200
 SEISMIC_MIN_MAGNITUDE=2.5
 ~~~
 
-Les deux coordonnées doivent correspondre au **lieu physique où le tirage officiel est effectué**, et non à l'emplacement de l'utilisateur ou du serveur. DRAW_TIMEZONE doit être un fuseau IANA valide (par exemple Indian/Antananarivo seulement si le site est effectivement dans ce fuseau). Si ces coordonnées sont absentes, les signes symboliques et cycles lunaires restent consultables, mais aucune météo ni activité sismique locale n'est téléchargée.
+Le réglage initial est **provisoire** : la documentation Bet261 indique que le Loto 5/35 peut être suivi en direct à Antaninarenina. Le point géographique utilisé correspond au centre approximatif du quartier (pas à l'emplacement vérifié d'une machine de tirage). Il doit être remplacé dans **Render → Environment** si l'opérateur ou le lieu officiel est différent. Les coordonnées du lieu de tirage ne doivent jamais être remplacées par celles de l'utilisateur ou du serveur. Le fuseau par défaut est Indian/Antananarivo et l'heure de référence est 16:35.
 
 - **Météo :** l'API historique Open-Meteo fournit des données quotidiennes de réanalyse (température, humidité, pression, précipitations, vent et couverture nuageuse). Ces valeurs sont des estimations sur une grille, pas des mesures garanties à l'adresse exacte. Documentation : https://open-meteo.com/en/docs/historical-weather-api
 - **Sismicité :** le catalogue USGS fournit les événements, magnitudes, profondeurs, lieux et distances dans le rayon demandé. Les dates sont ramenées au fuseau configuré. Il s'agit d'un catalogue d'événements, pas d'enregistrements de forme d'onde ou d'accélération du sol. Documentation : https://earthquake.usgs.gov/fdsnws/event/1/
-- **Astronomie :** la phase lunaire et l'éclairement sont des approximations calculées à l'heure officielle du tirage, par défaut 16:35 heure locale. DRAW_TIMEZONE convertit cette heure locale vers UTC. Tant que le fuseau réel n'est pas configuré (valeur `auto`), le calcul interprète provisoirement 16:35 comme UTC et l'interface l'indique explicitement.
+- **Astronomie :** la phase lunaire et l'éclairement sont des approximations calculées à l'heure officielle du tirage, par défaut 16:35 heure de Madagascar. Indian/Antananarivo convertit cette heure locale vers UTC ; un autre fuseau IANA peut être configuré dans Render si le tirage est effectué ailleurs.
 - **Astrologie :** le signe solaire est une étiquette zodiacale conventionnelle. Les résultats par signe sont descriptifs et ne constituent pas une preuve d'influence.
 - **Statistiques :** les corrélations de Spearman utilisent des p-values par permutation déterministe, puis une correction de Holm pour les tests multiples. En dessous de 30 tirages, le rapport n'effectue pas de batterie de corrélations. Un résultat significatif reste une piste à répliquer, jamais un signal prédictif acquis.
 
