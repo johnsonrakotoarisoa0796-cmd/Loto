@@ -125,3 +125,27 @@ def test_study_marks_small_sample_as_exploratory_or_insufficient(monkeypatch):
     larger = study.build_contextual_study(_draws(35))
     assert larger["meta"]["sample_level"] == "exploratory"
     assert larger["correlations"]["minimum_sample"] == study.MIN_CORRELATION_SAMPLE
+
+
+
+def test_lunar_phase_uses_official_draw_time_and_local_timezone():
+    result = study.lunar_context(
+        date(2026, 11, 18),
+        "16:35",
+        "Indian/Antananarivo",
+    )
+    assert result["reference_time_local"] == "16:35"
+    assert result["reference_timezone"] == "Indian/Antananarivo"
+    assert result["reference_time_utc"] == "2026-11-18T13:35+00:00"
+    assert result["timezone_assumed_utc"] is False
+
+
+def test_draw_time_defaults_to_1635_and_flags_missing_timezone(monkeypatch):
+    monkeypatch.delenv("DRAW_TIME", raising=False)
+    monkeypatch.delenv("DRAW_TIMEZONE", raising=False)
+    draw_time, timezone_name = study._draw_time_config()
+    assert draw_time.isoformat(timespec="minutes") == "16:35"
+    assert timezone_name == "auto"
+    result = study.lunar_context(date(2026, 11, 18), draw_time, timezone_name)
+    assert result["reference_time_local"] == "16:35"
+    assert result["timezone_assumed_utc"] is True
