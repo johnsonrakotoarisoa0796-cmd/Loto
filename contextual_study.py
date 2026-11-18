@@ -75,6 +75,15 @@ WEATHER_FIELDS = (
     "cloud_cover_mean",
 )
 
+HOURLY_WEATHER_FIELDS = (
+    "temperature_2m",
+    "relative_humidity_2m",
+    "pressure_msl",
+    "precipitation",
+    "wind_speed_10m",
+    "cloud_cover",
+)
+
 _CONTEXT_CACHE: dict[str, tuple[float, dict[str, Any], list[dict[str, Any]]]] = {}
 
 
@@ -231,12 +240,15 @@ def _fetch_json(url: str, timeout: float = 20.0) -> dict[str, Any]:
 def _fetch_weather(
     start_date: date, end_date: date, location: dict[str, Any]
 ) -> dict[str, dict[str, Any]]:
+    draw_time = datetime_time.fromisoformat(location.get("draw_time", "16:35"))
+    reference_hour = draw_time.replace(minute=0, second=0, microsecond=0).isoformat(timespec="minutes")
     params = {
         "latitude": location["latitude"],
         "longitude": location["longitude"],
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
         "daily": ",".join(WEATHER_FIELDS),
+        "hourly": ",".join(HOURLY_WEATHER_FIELDS),
         "timezone": location["timezone"],
     }
     url = "https://archive-api.open-meteo.com/v1/archive?" + urllib.parse.urlencode(params)
@@ -251,6 +263,24 @@ def _fetch_weather(
             value = values[index] if index < len(values) else None
             item[field] = value
         by_date[day] = item
+
+    # Use the hourly value at 16:00 local as a no-look-ahead proxy for a 16:35 draw.
+    # Hourly precipitation covers the preceding hour; daily summaries remain available too.
+    hourly = payload.get("hourly") or {}
+    hourly_times = hourly.get("time") or []
+    for index, timestamp in enumerate(hourly_times):
+        try:
+            local_timestamp = datetime.fromisoformat(timestamp)
+        except (TypeError, ValueError):
+            continue
+        if local_timestamp.strftime("%H:%M") != reference_hour:
+            continue
+        day = local_timestamp.date().isoformat()
+        item = by_date.setdefault(day, {})
+        for field in HOURLY_WEATHER_FIELDS:
+            values = hourly.get(field) or []
+            item[f"{field}_at_draw_hour"] = values[index] if index < len(values) else None
+        item["weather_reference_hour_local"] = reference_hour
     return by_date
 
 
@@ -347,6 +377,7 @@ def _external_context(
         "lat": location["latitude"],
         "lon": location["longitude"],
         "timezone": location["timezone"],
+        "draw_time": location["draw_time"],
         "radius": location["seismic_radius_km"],
         "min_mag": location["seismic_min_magnitude"],
     }
@@ -642,6 +673,7 @@ def build_contextual_study(raw_draws: Iterable[dict[str, Any]]) -> dict[str, Any
             "longitude": location.get("longitude"),
             "timezone": location.get("timezone"),
             "draw_time": location.get("draw_time", "16:35"),
+            "weather_reference_hour_local": datetime_time.fromisoformat(location.get("draw_time", "16:35")).replace(minute=0).isoformat(timespec="minutes"),
             "timezone_assumed_utc": location.get("timezone", "auto") == "auto",
             "seismic_radius_km": location.get("seismic_radius_km"),
             "seismic_min_magnitude": location.get("seismic_min_magnitude"),
@@ -650,7 +682,7 @@ def build_contextual_study(raw_draws: Iterable[dict[str, Any]]) -> dict[str, Any
         "methodology": {
             "astrology": "Signe solaire tropical calculé à partir de la date ; information symbolique, non validée comme facteur prédictif.",
             "astronomy": "Phase et éclairement lunaires approximatifs calculés à 16:35 heure locale de Madagascar par défaut, avec conversion en UTC via Indian/Antananarivo ; un fuseau différent peut être fourni par DRAW_TIMEZONE.",
-            "weather": "Valeurs quotidiennes historiques de réanalyse Open-Meteo ; elles ne sont pas nécessairement des mesures locales au point exact.",
+            "weather": "Open-Meteo fournit à la fois des résumés quotidiens et des valeurs horaires ; les colonnes de contexte utilisent l'heure locale arrondie à l'heure inférieure (16:00 pour un tirage à 16:35), comme approximation et sans information future. Les précipitations horaires couvrent l'heure précédente ; les archives sont des données de réanalyse, pas des mesures garanties au point exact.",
             "seismic": "Catalogue d'événements sismiques USGS dans le rayon configuré ; les horodatages sont ramenés au fuseau DRAW_TIMEZONE si celui-ci est configuré. Ce ne sont pas des mesures de forme d'onde ou d'accélération du sol à l'endroit du tirage.",
             "prediction_policy": "Aucune variable externe n'entre dans les scores ou les combinaisons de prédiction.",
         },
