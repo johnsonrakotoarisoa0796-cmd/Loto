@@ -61,13 +61,14 @@ Pour activer les données météorologiques et sismiques, ajoute au fichier .env
 DRAW_LOCATION_NAME=Antaninarenina, Antananarivo (approximatif)
 DRAW_LOCATION_LAT=-18.9103
 DRAW_LOCATION_LON=47.52502
+DRAW_LOCATION_IS_ESTIMATE=true
 DRAW_TIME=16:35
 DRAW_TIMEZONE=Indian/Antananarivo
 SEISMIC_RADIUS_KM=200
 SEISMIC_MIN_MAGNITUDE=2.5
 ~~~
 
-Le réglage initial est **provisoire** : la documentation Bet261 indique que le Loto 5/35 peut être suivi en direct à Antaninarenina. Le point géographique utilisé correspond au centre approximatif du quartier (pas à l'emplacement vérifié d'une machine de tirage). Il doit être remplacé dans **Render → Environment** si l'opérateur ou le lieu officiel est différent. Les coordonnées du lieu de tirage ne doivent jamais être remplacées par celles de l'utilisateur ou du serveur. Le fuseau par défaut est Indian/Antananarivo et l'heure de référence est 16:35.
+Le réglage initial est **provisoire** : la documentation Bet261 indique que le Loto 5/35 peut être suivi en direct à Antaninarenina. Le point géographique utilisé correspond au centre approximatif du quartier (pas à l'emplacement vérifié d'une machine de tirage). Il doit être remplacé dans **Render → Environment** si l'opérateur ou le lieu officiel est différent. Après remplacement des coordonnées, règle DRAW_LOCATION_IS_ESTIMATE=false. Les coordonnées du lieu de tirage ne doivent jamais être remplacées par celles de l'utilisateur ou du serveur. Le fuseau par défaut est Indian/Antananarivo et l'heure de référence est 16:35.
 
 - **Météo :** l'API historique Open-Meteo fournit des données quotidiennes de réanalyse (température, humidité, pression, précipitations, vent et couverture nuageuse). Ces valeurs sont des estimations sur une grille, pas des mesures garanties à l'adresse exacte. Documentation : https://open-meteo.com/en/docs/historical-weather-api
 - **Sismicité :** le catalogue USGS fournit les événements, magnitudes, profondeurs, lieux et distances dans le rayon demandé. Les dates sont ramenées au fuseau configuré. Il s'agit d'un catalogue d'événements, pas d'enregistrements de forme d'onde ou d'accélération du sol. Documentation : https://earthquake.usgs.gov/fdsnws/event/1/
