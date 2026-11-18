@@ -549,9 +549,9 @@ def get_contextual_study(db: Session = Depends(get_db)):
 
 
 @app.get("/api/contextual-prediction", dependencies=[Depends(require_auth)])
-def get_contextual_prediction(db: Session = Depends(get_db)):
+def get_contextual_prediction(refresh: bool = False, db: Session = Depends(get_db)):
     """Return an experimental next-draw ranking using pre-draw external context."""
     try:
-        return build_contextual_prediction(load_draws(db))
+        return build_contextual_prediction(load_draws(db), force_refresh=refresh)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
