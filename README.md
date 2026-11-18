@@ -13,6 +13,9 @@ Application web en français pour enregistrer les tirages 5/35 et suivre les fr�
 - Scénarios alternatifs issus des deux autres modèles statistiques, et non de combinaisons pseudo-aléatoires.
 - Backtest chronologique comparant les trois méthodes à la référence aléatoire de 0,714 numéro touché en moyenne par combinaison de cinq. L'apprentissage commence après 30 tirages ; les résultats sont explicitement qualifiés de très courts ou exploratoires lorsque l'échantillon de test est petit.
 - Tendances directionnelles : comparaison de deux fenêtres de 5 tirages à partir de 10 tirages, avec un seuil fixe pour limiter les faux signaux sur de petits échantillons.
+- Laboratoire climat & cosmos : signe zodiacal symbolique, phase lunaire approximative, archives météo Open-Meteo et événements sismiques du catalogue USGS autour du lieu du tirage.
+- Étude de corrélations exploratoires : indicateurs du tirage (somme, amplitude, parité, petits/grands numéros, répétitions) comparés aux variables externes par Spearman, permutation déterministe et correction de Holm.
+- Les variables exogènes ne sont jamais intégrées aux pronostics. Un signal éventuel doit être répliqué sur des tirages futurs ; l'astrologie est présentée comme symbolique, pas comme un facteur scientifiquement validé.
 - Audit scientifique : tests exacts des 35 fréquences et 595 paires, contrôle Holm-Bonferroni des comparaisons multiples, dépendances aux retards 1 à 5 et validation chronologique hors échantillon.
 - Thème Automatique / Clair / Sombre, mémorisé dans le navigateur et synchronisé entre la connexion, le tableau de bord et l’audit scientifique.
 - Enregistrement horodaté des pronostics et évaluation automatique contre le premier tirage suivant.
@@ -46,6 +49,32 @@ uvicorn app.main:app --reload
 Ouvre ensuite `http://127.0.0.1:8000`. Le sélecteur **Apparence** en haut de l’écran permet de choisir Automatique, Clair ou Sombre ; le choix est conservé dans ce navigateur. L’audit scientifique est disponible à `/science`.
 
 Pour un essai local sans écran de connexion, laisse `APP_PASSWORD` vide. Ne fais pas cela pour une instance publique.
+
+
+### Laboratoire climat & cosmos
+
+La page **Climat & cosmos** étudie le contexte associé aux dates historiques des tirages. Les variables restent séparées du moteur de prédiction.
+
+Pour activer les données météorologiques et sismiques, ajoute au fichier .env local ou à **Render → Environment** les variables suivantes :
+
+~~~env
+DRAW_LOCATION_NAME=Lieu réel du tirage
+DRAW_LOCATION_LAT=latitude_du_site
+DRAW_LOCATION_LON=longitude_du_site
+DRAW_TIMEZONE=Fuseau_IANA_du_site
+SEISMIC_RADIUS_KM=200
+SEISMIC_MIN_MAGNITUDE=2.5
+~~~
+
+Les deux coordonnées doivent correspondre au **lieu physique où le tirage officiel est effectué**, et non à l'emplacement de l'utilisateur ou du serveur. DRAW_TIMEZONE doit être un fuseau IANA valide (par exemple Indian/Antananarivo seulement si le site est effectivement dans ce fuseau). Si ces coordonnées sont absentes, les signes symboliques et cycles lunaires restent consultables, mais aucune météo ni activité sismique locale n'est téléchargée.
+
+- **Météo :** l'API historique Open-Meteo fournit des données quotidiennes de réanalyse (température, humidité, pression, précipitations, vent et couverture nuageuse). Ces valeurs sont des estimations sur une grille, pas des mesures garanties à l'adresse exacte. Documentation : https://open-meteo.com/en/docs/historical-weather-api
+- **Sismicité :** le catalogue USGS fournit les événements, magnitudes, profondeurs, lieux et distances dans le rayon demandé. Les dates sont ramenées au fuseau configuré. Il s'agit d'un catalogue d'événements, pas d'enregistrements de forme d'onde ou d'accélération du sol. Documentation : https://earthquake.usgs.gov/fdsnws/event/1/
+- **Astronomie :** la phase lunaire et l'éclairement sont des approximations calculées à midi UTC à partir du mois synodique moyen.
+- **Astrologie :** le signe solaire est une étiquette zodiacale conventionnelle. Les résultats par signe sont descriptifs et ne constituent pas une preuve d'influence.
+- **Statistiques :** les corrélations de Spearman utilisent des p-values par permutation déterministe, puis une correction de Holm pour les tests multiples. En dessous de 30 tirages, le rapport n'effectue pas de batterie de corrélations. Un résultat significatif reste une piste à répliquer, jamais un signal prédictif acquis.
+
+Les archives externes sont mises en cache en mémoire pendant six heures. Aucune nouvelle table de base ni migration SQL n'est créée pour cette étude.
 
 ## CSV
 
@@ -129,13 +158,14 @@ Le classement combine les fréquences historiques et une composante récente plu
 .
 ├── analysis_engine.py       # Statistiques descriptives et classement exploratoire
 ├── scientific_engine.py     # Audit scientifique et validation hors échantillon
+├── contextual_study.py      # Astrologie symbolique, Lune, météo et catalogue sismique
 ├── app/
 │   ├── database.py          # SQLAlchemy / SQLite / PostgreSQL
 │   ├── main.py              # API FastAPI, import/export, authentification
 │   ├── templates/           # Interface HTML
 │   └── static/              # CSS, JavaScript et thème partagé
 │       └── theme.js         # Apparence Auto / Clair / Sombre
-├── tests/                   # Tests statistiques et tests de l’audit
+├── tests/                   # Tests statistiques, audit et contexte externe
 ├── render.yaml
 ├── requirements.txt
 ├── INSTALLER-LOTO-LAB-PRO.ps1
