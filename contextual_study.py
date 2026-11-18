@@ -804,7 +804,7 @@ def build_contextual_study(
             "astrology": "Signe solaire tropical calculé à partir de la date ; information symbolique, non validée comme facteur prédictif.",
             "astronomy": "Phase et éclairement lunaires approximatifs calculés à 16:35 heure locale de Madagascar par défaut, avec conversion en UTC via Indian/Antananarivo ; un fuseau différent peut être fourni par DRAW_TIMEZONE.",
             "weather": "Open-Meteo fournit à la fois des résumés quotidiens et des valeurs horaires ; les colonnes de contexte utilisent l'heure locale arrondie à l'heure inférieure (16:00 pour un tirage à 16:35), comme approximation et sans information future. Les précipitations horaires couvrent l'heure précédente ; les archives sont des données de réanalyse, pas des mesures garanties au point exact.",
-            "seismic": "Catalogue d'événements sismiques USGS dans le rayon configuré ; les horodatages sont ramenés au fuseau DRAW_TIMEZONE si celui-ci est configuré. Ce ne sont pas des mesures de forme d'onde ou d'accélération du sol à l'endroit du tirage.",
+            "seismic": "Catalogue USGS limité pour chaque tirage aux 24 heures précédant l'heure locale de coupure (16:35 par défaut) ; il s'agit d'événements catalogués et non de mesures de forme d'onde ou d'accélération du sol sur place.",
             "prediction_policy": "Les variables externes sont évaluées par un moteur contextuel expérimental séparé ; leur poids reste limité et leur performance est contrôlée par validation chronologique.",
         },
         "correlations": correlations,
