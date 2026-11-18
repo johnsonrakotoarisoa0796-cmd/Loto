@@ -13,9 +13,10 @@ Application web en français pour enregistrer les tirages 5/35 et suivre les fr�
 - Scénarios alternatifs issus des deux autres modèles statistiques, et non de combinaisons pseudo-aléatoires.
 - Backtest chronologique comparant les trois méthodes à la référence aléatoire de 0,714 numéro touché en moyenne par combinaison de cinq. L'apprentissage commence après 30 tirages ; les résultats sont explicitement qualifiés de très courts ou exploratoires lorsque l'échantillon de test est petit.
 - Tendances directionnelles : comparaison de deux fenêtres de 5 tirages à partir de 10 tirages, avec un seuil fixe pour limiter les faux signaux sur de petits échantillons.
-- Laboratoire climat & cosmos : signe zodiacal symbolique, phase lunaire approximative, archives météo Open-Meteo et événements sismiques du catalogue USGS autour du lieu du tirage.
+- Laboratoire climat & cosmos : signe zodiacal symbolique, phase lunaire approximative, prévisions horaires Open-Meteo, archives météo et événements sismiques du catalogue USGS autour du lieu du tirage.
 - Étude de corrélations exploratoires : indicateurs du tirage (somme, amplitude, parité, petits/grands numéros, répétitions) comparés aux variables externes par Spearman, permutation déterministe et correction de Holm.
-- Les variables exogènes ne sont jamais intégrées aux pronostics. Un signal éventuel doit être répliqué sur des tirages futurs ; l'astrologie est présentée comme symbolique, pas comme un facteur scientifiquement validé.
+- Modèle contextuel expérimental : compare la météo prévue, la phase lunaire, le signe zodiacal symbolique et l'activité sismique récente aux contextes historiques similaires, puis combine les fréquences contextuelles avec le classement historique/récence. Le poids est plafonné à 25 % et le modèle exige au moins 30 contextes historiques horaires utilisables.
+- Le backtest contextuel est chronologique et compare sa performance au modèle historique ainsi qu'à la référence aléatoire de 0,714 numéro touché en moyenne. Les résultats restent expérimentaux et ne prouvent aucun avantage prédictif.
 - Audit scientifique : tests exacts des 35 fréquences et 595 paires, contrôle Holm-Bonferroni des comparaisons multiples, dépendances aux retards 1 à 5 et validation chronologique hors échantillon.
 - Thème Automatique / Clair / Sombre, mémorisé dans le navigateur et synchronisé entre la connexion, le tableau de bord et l’audit scientifique.
 - Enregistrement horodaté des pronostics et évaluation automatique contre le premier tirage suivant.
@@ -53,7 +54,7 @@ Pour un essai local sans écran de connexion, laisse `APP_PASSWORD` vide. Ne fai
 
 ### Laboratoire climat & cosmos
 
-La page **Climat & cosmos** étudie le contexte associé aux dates historiques des tirages. Les variables restent séparées du moteur de prédiction.
+La page **Climat & cosmos** étudie le contexte associé aux dates historiques des tirages. Un modèle contextuel expérimental peut également utiliser ces observations pour ajuster prudemment le classement principal, lorsque l'historique et la prévision météo sont suffisants.
 
 Pour activer les données météorologiques et sismiques, ajoute au fichier .env local ou à **Render → Environment** les variables suivantes :
 
@@ -70,11 +71,14 @@ SEISMIC_MIN_MAGNITUDE=2.5
 
 Le réglage initial est **provisoire** : la documentation Bet261 indique que le Loto 5/35 peut être suivi en direct à Antaninarenina. Le point géographique utilisé correspond au centre approximatif du quartier (pas à l'emplacement vérifié d'une machine de tirage). Il doit être remplacé dans **Render → Environment** si l'opérateur ou le lieu officiel est différent. Après remplacement des coordonnées, règle DRAW_LOCATION_IS_ESTIMATE=false. Les coordonnées du lieu de tirage ne doivent jamais être remplacées par celles de l'utilisateur ou du serveur. Le fuseau par défaut est Indian/Antananarivo et l'heure de référence est 16:35.
 
-- **Météo :** l'API historique Open-Meteo fournit des données quotidiennes de réanalyse (température, humidité, pression, précipitations, vent et couverture nuageuse). Ces valeurs sont des estimations sur une grille, pas des mesures garanties à l'adresse exacte. Documentation : https://open-meteo.com/en/docs/historical-weather-api
-- **Sismicité :** le catalogue USGS fournit les événements, magnitudes, profondeurs, lieux et distances dans le rayon demandé. Les dates sont ramenées au fuseau configuré. Il s'agit d'un catalogue d'événements, pas d'enregistrements de forme d'onde ou d'accélération du sol. Documentation : https://earthquake.usgs.gov/fdsnws/event/1/
+- **Météo :** les archives Open-Meteo reconstruisent le contexte historique autour de 16:00 locale (température, humidité, pression, précipitations de l'heure précédente, vent et nébulosité). Pour le prochain tirage, le modèle récupère la prévision horaire à 16:00 locale. Les valeurs sont des estimations sur une grille, pas des mesures garanties à l'adresse exacte. Documentation : https://open-meteo.com/en/docs et https://open-meteo.com/en/docs/historical-weather-api
+- **Sismicité :** le catalogue USGS fournit les événements, magnitudes, profondeurs, lieux et distances dans le rayon demandé. Le modèle prend un snapshot connu au moment de la prévision, puis reconstruit pour les tirages passés des fenêtres de 24 heures se terminant au même délai avant 16:35. Ainsi, les événements inconnus au moment du pronostic ne sont pas utilisés et les fenêtres historiques sont comparables. Il s'agit d'un catalogue d'événements, pas d'enregistrements de forme d'onde ou d'accélération du sol. Documentation : https://earthquake.usgs.gov/fdsnws/event/1/
 - **Astronomie :** la phase lunaire et l'éclairement sont des approximations calculées à l'heure officielle du tirage, par défaut 16:35 heure de Madagascar. Indian/Antananarivo convertit cette heure locale vers UTC ; un autre fuseau IANA peut être configuré dans Render si le tirage est effectué ailleurs.
 - **Astrologie :** le signe solaire est une étiquette zodiacale conventionnelle. Les résultats par signe sont descriptifs et ne constituent pas une preuve d'influence.
-- **Statistiques :** les corrélations de Spearman utilisent des p-values par permutation déterministe, puis une correction de Holm pour les tests multiples. En dessous de 30 tirages, le rapport n'effectue pas de batterie de corrélations. Un résultat significatif reste une piste à répliquer, jamais un signal prédictif acquis.
+- **Modèle contextuel :** il exige au moins 30 tirages avec trois variables météo horaires ou plus disponibles et une prévision pour la prochaine date. Il utilise des voisins contextuels pondérés avec un lissage fort vers le classement historique/récence ; son poids ne dépasse jamais 25 %. Sans données suffisantes, le classement historique reste actif.
+- **Validation :** le backtest contextuel est chronologique ; chaque date cible utilise uniquement les contextes précédant ce tirage et les valeurs horaires autour de 16:00. Un échantillon de test court ne permet pas de conclure ; il faut continuer à enregistrer les pronostics avant les tirages.
+- **Astrologie :** le signe solaire est une étiquette conventionnelle, utilisée à titre symbolique et avec un poids faible. Il ne constitue pas une preuve d'influence physique.
+- **Corrélations :** les tests de Spearman par permutation et la correction de Holm limitent les faux positifs exploratoires. Aucun résultat n'est présenté comme une causalité ou une garantie de prédiction.
 
 Les archives externes sont mises en cache en mémoire pendant six heures. Aucune nouvelle table de base ni migration SQL n'est créée pour cette étude.
 
@@ -161,6 +165,7 @@ Le classement combine les fréquences historiques et une composante récente plu
 ├── analysis_engine.py       # Statistiques descriptives et classement exploratoire
 ├── scientific_engine.py     # Audit scientifique et validation hors échantillon
 ├── contextual_study.py      # Astrologie symbolique, Lune, météo et catalogue sismique
+├── contextual_predictor.py  # Modèle contextuel pondéré et validation chronologique
 ├── app/
 │   ├── database.py          # SQLAlchemy / SQLite / PostgreSQL
 │   ├── main.py              # API FastAPI, import/export, authentification

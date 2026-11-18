@@ -39,7 +39,7 @@ def test_default_location_is_explicitly_approximate_and_keeps_study_local(monkey
     monkeypatch.setattr(
         study,
         "_external_context",
-        lambda start, end, location: (
+        lambda start, end, location, seismic_cutoff_offset=timedelta(0): (
             {"weather_available": False, "seismic_available": False,
              "weather_error": None, "seismic_error": None},
             [],
@@ -95,7 +95,7 @@ def test_configured_study_merges_daily_weather_and_seismic_records(monkeypatch):
     monkeypatch.setattr(
         study,
         "_external_context",
-        lambda start, end, location: (
+        lambda start, end, location, seismic_cutoff_offset=timedelta(0): (
             {"weather_available": True, "seismic_available": True,
              "weather_error": None, "seismic_error": None},
             [{"date": first_day, "weather": fake_weather, "seismic": fake_seismic}],
@@ -145,7 +145,7 @@ def test_study_marks_small_sample_as_exploratory_or_insufficient(monkeypatch):
     monkeypatch.setattr(
         study,
         "_external_context",
-        lambda start, end, location: (
+        lambda start, end, location, seismic_cutoff_offset=timedelta(0): (
             {"weather_available": False, "seismic_available": False,
              "weather_error": None, "seismic_error": None},
             [],
@@ -253,3 +253,123 @@ def test_unconfigured_fallback_cannot_be_marked_as_confirmed(monkeypatch):
     location = study._location_config()
     assert location["configured"] is True
     assert location["location_is_estimate"] is True
+
+def test_seismic_history_uses_only_the_24_hours_before_draw_cutoff(monkeypatch):
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+
+    draw_day = date(2026, 11, 18)
+    local_zone = ZoneInfo("Indian/Antananarivo")
+
+    def event(identifier, local_time, magnitude):
+        instant = local_time.replace(tzinfo=local_zone).astimezone(timezone.utc)
+        return {
+            "id": identifier,
+            "properties": {
+                "time": int(instant.timestamp() * 1000),
+                "mag": magnitude,
+                "place": identifier,
+                "url": "https://earthquake.usgs.gov/",
+            },
+            "geometry": {"coordinates": [47.52, -18.91, 12.0]},
+        }
+
+    features = [
+        event("inside-previous-day", datetime(2026, 11, 17, 17, 0), 3.0),
+        event("inside-draw-day", datetime(2026, 11, 18, 15, 0), 2.8),
+        event("after-cutoff", datetime(2026, 11, 18, 17, 0), 4.0),
+        event("older-than-24h", datetime(2026, 11, 17, 15, 0), 5.0),
+    ]
+    monkeypatch.setattr(study, "_fetch_json", lambda url: {"features": features})
+    result = study._fetch_seismic(
+        draw_day,
+        draw_day,
+        {
+            "latitude": -18.91,
+            "longitude": 47.52,
+            "timezone": "Indian/Antananarivo",
+            "draw_time": "16:35",
+            "seismic_radius_km": 200,
+            "seismic_min_magnitude": 2.5,
+        },
+    )
+    assert result[draw_day.isoformat()]["earthquake_count"] == 2
+    assert result[draw_day.isoformat()]["max_magnitude"] == 3.0
+    assert {item["id"] for item in result[draw_day.isoformat()]["events"]} == {
+        "inside-previous-day", "inside-draw-day"
+    }
+
+
+def test_forecast_weather_extracts_the_1600_local_hour(monkeypatch):
+    day = date(2026, 11, 19)
+    payload = {
+        "hourly": {
+            "time": [f"{day.isoformat()}T15:00", f"{day.isoformat()}T16:00", f"{day.isoformat()}T17:00"],
+            "temperature_2m": [21.0, 22.5, 23.0],
+            "relative_humidity_2m": [80.0, 76.0, 74.0],
+            "pressure_msl": [1010.0, 1011.0, 1012.0],
+            "precipitation": [0.1, 0.2, 0.0],
+            "wind_speed_10m": [8.0, 9.0, 10.0],
+            "cloud_cover": [80.0, 65.0, 50.0],
+        }
+    }
+    monkeypatch.setattr(study, "_fetch_json", lambda url: payload)
+    result = study._fetch_weather_forecast(
+        day,
+        {
+            "latitude": -18.91,
+            "longitude": 47.52,
+            "timezone": "Indian/Antananarivo",
+            "draw_time": "16:35",
+        },
+    )
+    assert result["weather_forecast_time_local"] == "2026-11-19T16:00"
+    assert result["temperature_2m_at_draw_hour"] == 22.5
+    assert result["precipitation_at_draw_hour"] == 0.2
+
+def test_seismic_history_aligns_with_a_prediction_made_before_draw_day(monkeypatch):
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+
+    draw_day = date(2026, 11, 18)
+    local_zone = ZoneInfo("Indian/Antananarivo")
+
+    def event(identifier, local_time, magnitude):
+        instant = local_time.replace(tzinfo=local_zone).astimezone(timezone.utc)
+        return {
+            "id": identifier,
+            "properties": {
+                "time": int(instant.timestamp() * 1000),
+                "mag": magnitude,
+                "place": identifier,
+                "url": "https://earthquake.usgs.gov/",
+            },
+            "geometry": {"coordinates": [47.52, -18.91, 12.0]},
+        }
+
+    features = [
+        event("same-lead-window-start", datetime(2026, 11, 17, 17, 0), 3.0),
+        event("same-lead-window-end", datetime(2026, 11, 18, 9, 0), 2.8),
+        event("after-forecast-snapshot", datetime(2026, 11, 18, 15, 0), 5.0),
+        event("before-same-lead-window", datetime(2026, 11, 17, 9, 0), 4.5),
+    ]
+    monkeypatch.setattr(study, "_fetch_json", lambda url: {"features": features})
+    result = study._fetch_seismic(
+        draw_day,
+        draw_day,
+        {
+            "latitude": -18.91,
+            "longitude": 47.52,
+            "timezone": "Indian/Antananarivo",
+            "draw_time": "16:35",
+            "seismic_radius_km": 200,
+            "seismic_min_magnitude": 2.5,
+        },
+        cutoff_offset=timedelta(hours=6, minutes=35),
+    )
+    assert result[draw_day.isoformat()]["earthquake_count"] == 2
+    assert result[draw_day.isoformat()]["max_magnitude"] == 3.0
+    assert {item["id"] for item in result[draw_day.isoformat()]["events"]} == {
+        "same-lead-window-start", "same-lead-window-end"
+    }
+

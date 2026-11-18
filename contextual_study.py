@@ -253,20 +253,29 @@ def _fetch_json(url: str, timeout: float = 20.0) -> dict[str, Any]:
 def _fetch_weather(
     start_date: date, end_date: date, location: dict[str, Any]
 ) -> dict[str, dict[str, Any]]:
+    """Combine daily historical reanalysis with archived pre-draw forecast snapshots.
+
+    Daily summaries are useful for descriptive charts. The contextual prediction
+    model specifically consumes the archived forecast at 16:00 local time, so
+    its training inputs better match the information available before the draw.
+    """
     draw_time = datetime_time.fromisoformat(location.get("draw_time", "16:35"))
     reference_hour = draw_time.replace(minute=0, second=0, microsecond=0).isoformat(timespec="minutes")
-    params = {
+
+    daily_params = {
         "latitude": location["latitude"],
         "longitude": location["longitude"],
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
         "daily": ",".join(WEATHER_FIELDS),
-        "hourly": ",".join(HOURLY_WEATHER_FIELDS),
         "timezone": location["timezone"],
     }
-    url = "https://archive-api.open-meteo.com/v1/archive?" + urllib.parse.urlencode(params)
-    payload = _fetch_json(url)
-    daily = payload.get("daily") or {}
+    daily_url = "https://archive-api.open-meteo.com/v1/archive?" + urllib.parse.urlencode(daily_params)
+    try:
+        daily_payload = _fetch_json(daily_url)
+    except (OSError, ValueError, urllib.error.URLError, TimeoutError):
+        daily_payload = {}
+    daily = daily_payload.get("daily") or {}
     dates = daily.get("time") or []
     by_date: dict[str, dict[str, Any]] = {}
     for index, day in enumerate(dates):
@@ -277,9 +286,26 @@ def _fetch_weather(
             item[field] = value
         by_date[day] = item
 
-    # Use the hourly value at 16:00 local as a no-look-ahead proxy for a 16:35 draw.
-    # Hourly precipitation covers the preceding hour; daily summaries remain available too.
-    hourly = payload.get("hourly") or {}
+    # Same forecast models and response format as the live Forecast API,
+    # archived historically from 2022 onward.
+    forecast_params = {
+        "latitude": location["latitude"],
+        "longitude": location["longitude"],
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "hourly": ",".join(HOURLY_WEATHER_FIELDS),
+        "timezone": location["timezone"],
+        "wind_speed_unit": "kmh",
+    }
+    forecast_url = (
+        "https://historical-forecast-api.open-meteo.com/v1/forecast?"
+        + urllib.parse.urlencode(forecast_params)
+    )
+    try:
+        forecast_payload = _fetch_json(forecast_url)
+    except (OSError, ValueError, urllib.error.URLError, TimeoutError):
+        return by_date
+    hourly = forecast_payload.get("hourly") or {}
     hourly_times = hourly.get("time") or []
     for index, timestamp in enumerate(hourly_times):
         try:
@@ -294,7 +320,39 @@ def _fetch_weather(
             values = hourly.get(field) or []
             item[f"{field}_at_draw_hour"] = values[index] if index < len(values) else None
         item["weather_reference_hour_local"] = reference_hour
+        item["weather_context_source"] = "Open-Meteo Historical Forecast API"
     return by_date
+
+
+def _fetch_weather_forecast(draw_date: date, location: dict[str, Any]) -> dict[str, Any]:
+    """Fetch forecast weather at the local hour immediately before the 16:35 draw."""
+    draw_time = datetime_time.fromisoformat(location.get("draw_time", "16:35"))
+    reference_hour = draw_time.replace(minute=0, second=0, microsecond=0).isoformat(timespec="minutes")
+    params = {
+        "latitude": location["latitude"],
+        "longitude": location["longitude"],
+        "hourly": ",".join(HOURLY_WEATHER_FIELDS),
+        "forecast_days": 16,
+        "timezone": location["timezone"],
+        "wind_speed_unit": "kmh",
+    }
+    url = "https://api.open-meteo.com/v1/forecast?" + urllib.parse.urlencode(params)
+    payload = _fetch_json(url)
+    hourly = payload.get("hourly") or {}
+    timestamps = hourly.get("time") or []
+    target_timestamp = f"{draw_date.isoformat()}T{reference_hour}"
+    index = next((i for i, value in enumerate(timestamps) if value == target_timestamp), None)
+    if index is None:
+        raise ValueError("La prévision horaire Open-Meteo ne couvre pas la date du prochain tirage.")
+    result: dict[str, Any] = {"weather_reference_hour_local": reference_hour}
+    for field in HOURLY_WEATHER_FIELDS:
+        values = hourly.get(field) or []
+        result[f"{field}_at_draw_hour"] = values[index] if index < len(values) else None
+    if sum(value is not None for key, value in result.items() if key.endswith("_at_draw_hour")) < 3:
+        raise ValueError("Prévision Open-Meteo incomplète pour l'heure du tirage.")
+    result["weather_source"] = "Open-Meteo Forecast API"
+    result["weather_forecast_time_local"] = target_timestamp
+    return result
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -314,22 +372,93 @@ def _date_chunks(start_date: date, end_date: date, max_days: int = 1700):
         cursor = chunk_end + timedelta(days=1)
 
 
+def _summarize_seismic_events(events: list[dict[str, Any]]) -> dict[str, Any]:
+    magnitudes = [
+        float(event["magnitude"])
+        for event in events
+        if event.get("magnitude") is not None
+    ]
+    distances = [float(event["distance_km"]) for event in events]
+    nearest_event = min(events, key=lambda event: event["distance_km"]) if events else None
+    return {
+        "earthquake_count": len(events),
+        "max_magnitude": max(magnitudes) if magnitudes else 0.0,
+        "nearest_distance_km": min(distances) if distances else None,
+        "nearest_depth_km": nearest_event["depth_km"] if nearest_event else None,
+        "events": sorted(events, key=lambda event: event["distance_km"])[:5],
+        "seismic_window_hours": 24,
+    }
+
+
+def _fetch_recent_seismic_snapshot(
+    location: dict[str, Any],
+    as_of: datetime | None = None,
+) -> dict[str, Any]:
+    """Return catalogued events in the 24 hours before the current prediction snapshot."""
+    end_time = as_of or datetime.now(timezone.utc)
+    if end_time.tzinfo is None:
+        end_time = end_time.replace(tzinfo=timezone.utc)
+    end_time = end_time.astimezone(timezone.utc)
+    start_time = end_time - timedelta(hours=24)
+    params = {
+        "format": "geojson",
+        "starttime": start_time.isoformat(timespec="seconds"),
+        "endtime": end_time.isoformat(timespec="seconds"),
+        "latitude": location["latitude"],
+        "longitude": location["longitude"],
+        "maxradiuskm": location["seismic_radius_km"],
+        "minmagnitude": location["seismic_min_magnitude"],
+        "orderby": "time-asc",
+        "limit": 1000,
+    }
+    url = "https://earthquake.usgs.gov/fdsnws/event/1/query?" + urllib.parse.urlencode(params)
+    payload = _fetch_json(url)
+    events = []
+    for feature in payload.get("features") or []:
+        properties = feature.get("properties") or {}
+        coordinates = (feature.get("geometry") or {}).get("coordinates") or []
+        if len(coordinates) < 3 or properties.get("time") is None:
+            continue
+        longitude, latitude, depth = coordinates[:3]
+        distance = _haversine_km(
+            location["latitude"], location["longitude"], float(latitude), float(longitude)
+        )
+        event_time = datetime.fromtimestamp(properties["time"] / 1000, tz=timezone.utc)
+        events.append({
+            "id": feature.get("id"),
+            "time_utc": event_time.isoformat(),
+            "magnitude": properties.get("mag"),
+            "depth_km": depth,
+            "distance_km": round(distance, 1),
+            "place": properties.get("place"),
+            "url": properties.get("url"),
+        })
+    summary = _summarize_seismic_events(events)
+    summary["snapshot_time_utc"] = end_time.isoformat(timespec="seconds")
+    summary["window_start_utc"] = start_time.isoformat(timespec="seconds")
+    summary["available"] = True
+    return summary
+
+
 def _fetch_seismic(
-    start_date: date, end_date: date, location: dict[str, Any]
+    start_date: date,
+    end_date: date,
+    location: dict[str, Any],
+    cutoff_offset: timedelta = timedelta(0),
 ) -> dict[str, dict[str, Any]]:
+    """Build a 24-hour seismic window ending at a consistent pre-draw forecast cutoff."""
     events_by_date: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    timezone_name = location.get("timezone", "auto")
+    timezone_name = location.get("timezone", DEFAULT_DRAW_TIMEZONE)
     try:
-        local_timezone = ZoneInfo(timezone_name) if timezone_name != "auto" else timezone.utc
+        local_timezone = ZoneInfo(timezone_name)
     except ZoneInfoNotFoundError:
-        local_timezone = timezone.utc
+        local_timezone = ZoneInfo(DEFAULT_DRAW_TIMEZONE)
+    draw_time = datetime_time.fromisoformat(location.get("draw_time", "16:35"))
     seen_event_keys: set[str] = set()
     for chunk_start, chunk_end in _date_chunks(start_date, end_date):
         params = {
             "format": "geojson",
-            # Include a margin so UTC catalogue events can be assigned to a local
-            # draw date even when the configured time zone is not UTC.
-            "starttime": (chunk_start - timedelta(days=1)).isoformat(),
+            "starttime": (chunk_start - timedelta(days=2)).isoformat(),
             "endtime": (chunk_end + timedelta(days=2)).isoformat(),
             "latitude": location["latitude"],
             "longitude": location["longitude"],
@@ -347,17 +476,16 @@ def _fetch_seismic(
                 continue
             longitude, latitude, depth = coordinates[:3]
             event_time = datetime.fromtimestamp(properties["time"] / 1000, tz=timezone.utc)
-            event_day = event_time.astimezone(local_timezone).date().isoformat()
+            local_event_time = event_time.astimezone(local_timezone)
+            event_day = local_event_time.date()
             event_key = str(feature.get("id") or f"{event_time.isoformat()}:{latitude}:{longitude}")
             if event_key in seen_event_keys:
                 continue
             seen_event_keys.add(event_key)
-            if not start_date.isoformat() <= event_day <= end_date.isoformat():
-                continue
             distance = _haversine_km(
                 location["latitude"], location["longitude"], float(latitude), float(longitude)
             )
-            events_by_date[event_day].append({
+            event = {
                 "id": feature.get("id"),
                 "time_utc": event_time.isoformat(),
                 "magnitude": properties.get("mag"),
@@ -365,24 +493,31 @@ def _fetch_seismic(
                 "distance_km": round(distance, 1),
                 "place": properties.get("place"),
                 "url": properties.get("url"),
-            })
-    result = {}
-    for day, events in events_by_date.items():
-        magnitudes = [float(event["magnitude"]) for event in events if event["magnitude"] is not None]
-        distances = [float(event["distance_km"]) for event in events]
-        nearest_event = min(events, key=lambda event: event["distance_km"]) if events else None
-        result[day] = {
-            "earthquake_count": len(events),
-            "max_magnitude": max(magnitudes) if magnitudes else None,
-            "nearest_distance_km": min(distances) if distances else None,
-            "nearest_depth_km": nearest_event["depth_km"] if nearest_event else None,
-            "events": sorted(events, key=lambda event: event["distance_km"])[:5],
-        }
-    return result
+            }
+            # A forecast snapshot may be taken up to 24 hours before the draw.
+            # Its 24-hour observation window can therefore begin two local dates earlier.
+            for draw_day in (event_day, event_day + timedelta(days=1), event_day + timedelta(days=2)):
+                if not start_date <= draw_day <= end_date:
+                    continue
+                cutoff_local = (
+                    datetime.combine(draw_day, draw_time, tzinfo=local_timezone)
+                    - cutoff_offset
+                )
+                if cutoff_local - timedelta(hours=24) <= event_time <= cutoff_local:
+                    events_by_date[draw_day.isoformat()].append(event)
+    return {
+        (start_date + timedelta(days=index)).isoformat(): _summarize_seismic_events(
+            events_by_date.get((start_date + timedelta(days=index)).isoformat(), [])
+        )
+        for index in range((end_date - start_date).days + 1)
+    }
 
 
 def _external_context(
-    start_date: date, end_date: date, location: dict[str, Any]
+    start_date: date,
+    end_date: date,
+    location: dict[str, Any],
+    seismic_cutoff_offset: timedelta = timedelta(0),
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     cache_payload = {
         "start": start_date.isoformat(),
@@ -391,6 +526,7 @@ def _external_context(
         "lon": location["longitude"],
         "timezone": location["timezone"],
         "draw_time": location["draw_time"],
+        "seismic_cutoff_offset_seconds": int(seismic_cutoff_offset.total_seconds()),
         "radius": location["seismic_radius_km"],
         "min_mag": location["seismic_min_magnitude"],
     }
@@ -414,7 +550,9 @@ def _external_context(
     except (OSError, ValueError, urllib.error.URLError, TimeoutError):
         statuses["weather_error"] = "Archives météorologiques momentanément indisponibles."
     try:
-        seismic = _fetch_seismic(start_date, end_date, location)
+        seismic = _fetch_seismic(
+            start_date, end_date, location, cutoff_offset=seismic_cutoff_offset
+        )
         statuses["seismic_available"] = True
     except (OSError, ValueError, urllib.error.URLError, TimeoutError):
         statuses["seismic_error"] = "Catalogue sismique momentanément indisponible."
@@ -590,7 +728,12 @@ def _group_statistics(rows: list[dict[str, Any]], key: str) -> list[dict[str, An
     return result
 
 
-def build_contextual_study(raw_draws: Iterable[dict[str, Any]]) -> dict[str, Any]:
+def build_contextual_study(
+    raw_draws: Iterable[dict[str, Any]],
+    *,
+    include_all_rows: bool = False,
+    seismic_cutoff_offset: timedelta = timedelta(0),
+) -> dict[str, Any]:
     """Build an observational dataset; do not alter any prediction scores."""
     draws = []
     for item in raw_draws:
@@ -637,7 +780,8 @@ def build_contextual_study(raw_draws: Iterable[dict[str, Any]]) -> dict[str, Any
     weather_rows: list[dict[str, Any]] = []
     if draws and location["configured"]:
         source_status, weather_rows = _external_context(
-            draws[0]["date"], draws[-1]["date"], location
+            draws[0]["date"], draws[-1]["date"], location,
+            seismic_cutoff_offset=seismic_cutoff_offset,
         )
         environment_by_date = {row["date"]: row for row in weather_rows}
         for row in rows:
@@ -645,12 +789,13 @@ def build_contextual_study(raw_draws: Iterable[dict[str, Any]]) -> dict[str, Any
             weather = context.get("weather") or {}
             seismic = context.get("seismic") or {}
             row.update(weather)
+            seismic_data_available = source_status.get("seismic_available", False)
             row.update({
-                "earthquake_count": seismic.get("earthquake_count", 0),
-                "max_magnitude": seismic.get("max_magnitude"),
-                "nearest_distance_km": seismic.get("nearest_distance_km"),
-                "nearest_depth_km": seismic.get("nearest_depth_km"),
-                "seismic_events": seismic.get("events", []),
+                "earthquake_count": seismic.get("earthquake_count", 0) if seismic_data_available else None,
+                "max_magnitude": seismic.get("max_magnitude") if seismic_data_available else None,
+                "nearest_distance_km": seismic.get("nearest_distance_km") if seismic_data_available else None,
+                "nearest_depth_km": seismic.get("nearest_depth_km") if seismic_data_available else None,
+                "seismic_events": seismic.get("events", []) if seismic_data_available else [],
             })
     else:
         for row in rows:
@@ -696,17 +841,18 @@ def build_contextual_study(raw_draws: Iterable[dict[str, Any]]) -> dict[str, Any
             "timezone_assumed_utc": location.get("timezone", "auto") == "auto",
             "seismic_radius_km": location.get("seismic_radius_km"),
             "seismic_min_magnitude": location.get("seismic_min_magnitude"),
+            "seismic_cutoff_offset_hours": round(seismic_cutoff_offset.total_seconds() / 3600, 3),
             **source_status,
         },
         "methodology": {
             "astrology": "Signe solaire tropical calculé à partir de la date ; information symbolique, non validée comme facteur prédictif.",
             "astronomy": "Phase et éclairement lunaires approximatifs calculés à 16:35 heure locale de Madagascar par défaut, avec conversion en UTC via Indian/Antananarivo ; un fuseau différent peut être fourni par DRAW_TIMEZONE.",
             "weather": "Open-Meteo fournit à la fois des résumés quotidiens et des valeurs horaires ; les colonnes de contexte utilisent l'heure locale arrondie à l'heure inférieure (16:00 pour un tirage à 16:35), comme approximation et sans information future. Les précipitations horaires couvrent l'heure précédente ; les archives sont des données de réanalyse, pas des mesures garanties au point exact.",
-            "seismic": "Catalogue d'événements sismiques USGS dans le rayon configuré ; les horodatages sont ramenés au fuseau DRAW_TIMEZONE si celui-ci est configuré. Ce ne sont pas des mesures de forme d'onde ou d'accélération du sol à l'endroit du tirage.",
-            "prediction_policy": "Aucune variable externe n'entre dans les scores ou les combinaisons de prédiction.",
+            "seismic": "Catalogue USGS sur une fenêtre de 24 heures se terminant à l'heure de référence locale moins le décalage de coupure demandé ; le modèle contextuel choisit ce décalage pour aligner les fenêtres historiques sur le délai de calcul du pronostic courant. Par défaut, le décalage vaut zéro et la fenêtre se termine à 16:35. Il s'agit d'événements catalogués, pas de formes d'onde mesurées sur place.",
+            "prediction_policy": "Les variables externes sont évaluées par un moteur contextuel expérimental séparé ; leur poids reste limité et leur performance est contrôlée par validation chronologique.",
         },
         "correlations": correlations,
         "zodiac_groups": _group_statistics(rows, "zodiac_sign") if rows else [],
         "moon_groups": _group_statistics(rows, "moon_phase") if rows else [],
-        "rows": rows[-40:][::-1],
+        "rows": (rows if include_all_rows else rows[-40:])[::-1],
     }
