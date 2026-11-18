@@ -296,7 +296,7 @@
       : " Référence horaire : " + (meta.draw_time || "16:35") + " (" + (meta.timezone || "fuseau configuré") + ").";
     const notices = [];
     if (meta.location_is_estimate) {
-      notices.push("Lieu provisoire : centre du quartier Antaninarenina à Antananarivo, utilisé comme approximation parce que le site exact n'a pas été confirmé. Vérifie que le tirage correspond bien au Loto 5/35 Bet261 ; remplace DRAW_LOCATION_LAT, DRAW_LOCATION_LON et DRAW_LOCATION_NAME dans Render si nécessaire.");
+      notices.push("Lieu provisoire : centre du quartier Antaninarenina à Antananarivo, utilisé comme approximation parce que le site exact n'a pas été confirmé. Vérifie que le tirage correspond bien au Loto 5/35 Bet261 ; remplace DRAW_LOCATION_LAT, DRAW_LOCATION_LON et DRAW_LOCATION_NAME dans Render et règle DRAW_LOCATION_IS_ESTIMATE=false si nécessaire.");
     }
     if (meta.weather_error || meta.seismic_error) {
       notices.push([meta.weather_error, meta.seismic_error].filter(Boolean).join(" "));
