@@ -1,5 +1,5 @@
 (() => {
-  const state = { draws: [], analysis: null, forecastHistory: [], contextualStudy: null, contextualLoading: false, csrf: window.LOTO_CSRF || "", editingId: null };
+  const state = { draws: [], analysis: null, forecastHistory: [], contextualStudy: null, contextualLoading: false, contextualPrediction: null, contextualPredictionLoading: false, csrf: window.LOTO_CSRF || "", editingId: null };
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const numberFmt = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
@@ -59,6 +59,7 @@
     history.replaceState(null, "", `#${view}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (view === "environment" && !state.contextualStudy && !state.contextualLoading) loadContextualStudy();
+    if (view === "prediction" && !state.contextualPrediction && !state.contextualPredictionLoading) loadContextualPrediction();
   }
 
   function renderOverview() {
@@ -164,7 +165,30 @@
   function renderPrediction() {
     const { summary, prediction, backtest } = state.analysis;
     const models = prediction.models || [];
-    const primary = models.find((model) => model.id === "hybrid") || models[0];
+    const primary = models.find((model) => model.id === prediction.active_model_id) || models.find((model) => model.id === "hybrid") || models[0];
+    const contextual = prediction.contextual_model || state.contextualPrediction;
+    const contextNote = $("#prediction-context-note");
+    if (contextNote) {
+      if (!contextual) {
+        contextNote.textContent = state.contextualPredictionLoading
+          ? "Chargement des prévisions Open-Meteo et des observations astronomiques/sismiques…"
+          : "Le modèle contextuel se charge à l'ouverture de ce laboratoire.";
+      } else if (contextual.ready) {
+        const features = (contextual.features_used_labels || []).join(", ");
+        const forecastTime = contextual.forecast_weather && contextual.forecast_weather.weather_forecast_time_local;
+        contextNote.textContent = "Modèle contextuel actif pour le " + formatDate(contextual.next_draw_date) +
+          " à " + (contextual.reference_time_local || "16:35") + " (" + (contextual.timezone || "heure locale") + "). " +
+          "Poids contextuel : " + Math.round((contextual.contextual_weight || 0) * 100) + " % ; " +
+          (contextual.historical_context_draws || 0) + " contextes historiques utilisables. " +
+          "Variables : " + (features || "météo et astronomie") +
+          (forecastTime ? ". Prévision météo : " + forecastTime + "." : ".") +
+          (contextual.location_is_estimate ? " Lieu géographique approximatif." : "");
+      } else {
+        contextNote.textContent = "Le modèle météo/cosmos n'est pas encore activé : " +
+          (contextual.reason || "données contextuelles insuffisantes") +
+          " Le classement affiché reste celui de l'historique et de la récence, sans inventer de signal.";
+      }
+    }
     $("#prediction-combo").innerHTML = prediction.numbers.map((n) => '<span>' + String(n).padStart(2, "0") + '</span>').join("　·　");
     if (primary) {
       $("#prediction-method-name").textContent = primary.label;
@@ -198,7 +222,7 @@
       '</div>';
     }).join("");
 
-    const alternatives = models.filter((model) => model.id !== "hybrid");
+    const alternatives = models.filter((model) => model.id !== (primary && primary.id));
     $("#alternative-combos").innerHTML = alternatives.length ? alternatives.map((model) =>
       '<section class="method-card">' +
         '<div class="method-card-head"><div><strong>' + escapeHtml(model.label) + '</strong><p>' + escapeHtml(model.description) + '</p></div>' +
@@ -243,7 +267,16 @@
           '<thead><tr><th>MÉTHODE</th><th>TESTS</th><th>MOYENNE OBSERVÉE</th><th>HASARD ATTENDU</th><th>ÉCART</th></tr></thead>' +
           '<tbody>' + methodRows + '</tbody>' +
         '</table></div>' +
-        '<p class="micro-note">' + escapeHtml(comparison.methodology || "") + ' Une différence positive sur un petit échantillon n’est pas une preuve d’avantage prédictif. ' + caveat + '</p>';
+        '<p class="micro-note">' + escapeHtml(comparison.methodology || "") + ' Une différence positive sur un petit échantillon n’est pas une preuve d’avantage prédictif. ' + caveat + '</p>' +
+        (contextual && contextual.backtest && contextual.backtest.available
+          ? '<p class="micro-note"><strong>Modèle contextuel :</strong> ' + contextual.backtest.tested_draws +
+            ' tests chronologiques · moyenne ' + Number(contextual.backtest.contextual_average_hits).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) +
+            '/5 · modèle historique ' + Number(contextual.backtest.baseline_average_hits).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) +
+            '/5 · écart ' + (contextual.backtest.difference_vs_baseline > 0 ? "+" : "") +
+            Number(contextual.backtest.difference_vs_baseline).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) +
+            '/5. ' + escapeHtml(contextual.backtest.warning || "") + '</p>'
+          : contextual && contextual.backtest && contextual.backtest.reason
+            ? '<p class="micro-note">Backtest contextuel : ' + escapeHtml(contextual.backtest.reason) + '</p>' : '');
     }
 
     const forecasts = state.forecastHistory;
@@ -357,6 +390,55 @@
     ].filter(Boolean).join(" ");
   }
 
+  async function loadContextualPrediction(force = false) {
+    if (state.contextualPredictionLoading) return;
+    if (state.contextualPrediction && !force) {
+      renderPrediction();
+      return;
+    }
+    state.contextualPredictionLoading = true;
+    if (state.analysis) renderPrediction();
+    try {
+      const result = await api("/api/contextual-prediction");
+      state.contextualPrediction = result;
+      if (state.analysis) {
+        const prediction = state.analysis.prediction;
+        prediction.contextual_model = result;
+        prediction.active_model_id = "hybrid";
+        const baseModels = (prediction.models || []).filter((model) => model.id !== "contextual");
+        if (result.ready) {
+          const model = {
+            id: "contextual",
+            label: "Historique + météo + Lune + sismicité",
+            description: "Classement expérimental combinant le passé et les contextes environnementaux comparables.",
+            numbers: result.numbers,
+            score_index: result.score_index,
+            score_note: "Indice relatif et contextuel, pas une probabilité."
+          };
+          prediction.models = [...baseModels, model];
+          prediction.active_model_id = "contextual";
+          prediction.numbers = result.numbers;
+          prediction.ranked = result.ranked;
+          prediction.method = "Historique + météo + Lune + sismicité (expérimental)";
+          prediction.alternatives = prediction.models.filter((item) => item.id !== "contextual").map((item) => item.numbers);
+        } else {
+          prediction.models = baseModels;
+        }
+        renderPrediction();
+      }
+    } catch (error) {
+      state.contextualPrediction = {
+        ready: false,
+        reason: "Impossible de charger le modèle contextuel : " + error.message,
+        backtest: { available: false, reason: error.message }
+      };
+      if (state.analysis) renderPrediction();
+      toast("Modèle contextuel indisponible : " + error.message, true);
+    } finally {
+      state.contextualPredictionLoading = false;
+    }
+  }
+
   async function loadContextualStudy(force = false) {
     if (state.contextualLoading) return;
     if (state.contextualStudy && !force) {
@@ -392,7 +474,9 @@
       state.draws = drawData.draws;
       state.analysis = analysis;
       state.forecastHistory = forecastData.predictions;
+      state.contextualPrediction = null;
       renderAll();
+      if ($("#view-prediction").classList.contains("active")) loadContextualPrediction(true);
       if (showMessage) toast("Données actualisées.");
     } catch (error) {
       toast(error.message, true);
