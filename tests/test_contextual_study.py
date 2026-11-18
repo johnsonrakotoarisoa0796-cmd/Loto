@@ -327,3 +327,49 @@ def test_forecast_weather_extracts_the_1600_local_hour(monkeypatch):
     assert result["temperature_2m_at_draw_hour"] == 22.5
     assert result["precipitation_at_draw_hour"] == 0.2
 
+def test_seismic_history_aligns_with_a_prediction_made_before_draw_day(monkeypatch):
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+
+    draw_day = date(2026, 11, 18)
+    local_zone = ZoneInfo("Indian/Antananarivo")
+
+    def event(identifier, local_time, magnitude):
+        instant = local_time.replace(tzinfo=local_zone).astimezone(timezone.utc)
+        return {
+            "id": identifier,
+            "properties": {
+                "time": int(instant.timestamp() * 1000),
+                "mag": magnitude,
+                "place": identifier,
+                "url": "https://earthquake.usgs.gov/",
+            },
+            "geometry": {"coordinates": [47.52, -18.91, 12.0]},
+        }
+
+    features = [
+        event("same-lead-window-start", datetime(2026, 11, 17, 17, 0), 3.0),
+        event("same-lead-window-end", datetime(2026, 11, 18, 9, 0), 2.8),
+        event("after-forecast-snapshot", datetime(2026, 11, 18, 15, 0), 5.0),
+        event("before-same-lead-window", datetime(2026, 11, 17, 9, 0), 4.5),
+    ]
+    monkeypatch.setattr(study, "_fetch_json", lambda url: {"features": features})
+    result = study._fetch_seismic(
+        draw_day,
+        draw_day,
+        {
+            "latitude": -18.91,
+            "longitude": 47.52,
+            "timezone": "Indian/Antananarivo",
+            "draw_time": "16:35",
+            "seismic_radius_km": 200,
+            "seismic_min_magnitude": 2.5,
+        },
+        cutoff_offset=timedelta(hours=6, minutes=35),
+    )
+    assert result[draw_day.isoformat()]["earthquake_count"] == 2
+    assert result[draw_day.isoformat()]["max_magnitude"] == 3.0
+    assert {item["id"] for item in result[draw_day.isoformat()]["events"]} == {
+        "same-lead-window-start", "same-lead-window-end"
+    }
+
