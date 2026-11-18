@@ -11,7 +11,6 @@ from itertools import combinations
 from math import comb, sqrt
 from datetime import date
 from typing import Iterable, Sequence
-import random
 
 N_NUMBERS = 35
 PICK_COUNT = 5
@@ -151,6 +150,184 @@ def _top_numbers(draws: Sequence[dict]) -> list[int]:
     return [row["number"] for row in sorted(scores, key=lambda x: (-x["score"], x["number"]))[:PICK_COUNT]]
 
 
+
+MODEL_DEFINITIONS = (
+    {
+        "id": "hybrid",
+        "label": "Historique + récence",
+        "description": "Équilibre les fréquences globales et les dernières sorties, avec un lissage fixe.",
+    },
+    {
+        "id": "frequency",
+        "label": "Fréquence globale lissée",
+        "description": "Classe les numéros selon leur fréquence sur tout l'historique, avec un a priori modéré.",
+    },
+    {
+        "id": "recent",
+        "label": "Récence courte",
+        "description": "Donne plus de poids aux tirages récents avec une demi-vie fixe de 2 tirages.",
+    },
+)
+RECENT_MODEL_HALF_LIFE = 2.0
+RECENT_MODEL_PRIOR = 8.0
+BACKTEST_MIN_TRAINING_DRAWS = 30
+
+
+def _method_rankings(
+    draws: Sequence[dict],
+    hybrid_rows: Sequence[dict] | None = None,
+) -> list[dict]:
+    """Build three fixed, distinct rankings; scores are indices, not probabilities."""
+    total = len(draws)
+    hybrid = list(hybrid_rows if hybrid_rows is not None else _number_scores(draws))
+    counts = Counter(number for draw in draws for number in draw["numbers"])
+
+    frequency_scores = {
+        number: (counts[number] + PRIOR_DRAWS * BASE_RATE) / (total + PRIOR_DRAWS)
+        for number in range(1, N_NUMBERS + 1)
+    }
+
+    weighted_hits: Counter = Counter()
+    weight_total = 0.0
+    for index, draw in enumerate(draws):
+        weight = 2 ** (-(total - 1 - index) / RECENT_MODEL_HALF_LIFE)
+        weight_total += weight
+        for number in draw["numbers"]:
+            weighted_hits[number] += weight
+    recent_scores = {
+        number: (weighted_hits[number] + RECENT_MODEL_PRIOR * BASE_RATE)
+        / (weight_total + RECENT_MODEL_PRIOR)
+        for number in range(1, N_NUMBERS + 1)
+    }
+
+    score_maps = {
+        "hybrid": {row["number"]: row["score"] for row in hybrid},
+        "frequency": frequency_scores,
+        "recent": recent_scores,
+    }
+    results = []
+    for definition in MODEL_DEFINITIONS:
+        scores = score_maps[definition["id"]]
+        ranked = sorted(
+            (
+                {
+                    "number": number,
+                    "score": scores[number],
+                    "score_index": scores[number] / BASE_RATE * 100,
+                }
+                for number in range(1, N_NUMBERS + 1)
+            ),
+            key=lambda row: (-row["score"], row["number"]),
+        )
+        results.append({**definition, "ranked": ranked})
+    return results
+
+
+def _build_rank_movements(
+    draws: Sequence[dict],
+    current_ranked: list[dict],
+) -> dict:
+    """Compare today's hybrid ranking with the ranking before the latest draw."""
+    if len(draws) < 2:
+        return {"available": False, "up": [], "down": []}
+
+    previous_ranked = _number_scores(draws[:-1])
+    previous_rank_map = {
+        row["number"]: rank
+        for rank, row in enumerate(
+            sorted(previous_ranked, key=lambda item: (-item["score"], item["number"])),
+            start=1,
+        )
+    }
+
+    rows = []
+    for rank, row in enumerate(current_ranked, start=1):
+        previous_rank = previous_rank_map[row["number"]]
+        change = previous_rank - rank
+        rows.append({
+            "number": row["number"],
+            "rank": rank,
+            "previous_rank": previous_rank,
+            "rank_change": change,
+            "movement": "up" if change > 0 else "down" if change < 0 else "stable",
+        })
+    up = sorted((row for row in rows if row["rank_change"] > 0),
+                key=lambda row: (-row["rank_change"], row["rank"]))[:5]
+    down = sorted((row for row in rows if row["rank_change"] < 0),
+                  key=lambda row: (row["rank_change"], row["rank"]))[:5]
+    return {"available": True, "up": up, "down": down}
+
+
+def _backtest_methods(
+    draws: Sequence[dict],
+    min_training: int = BACKTEST_MIN_TRAINING_DRAWS,
+) -> dict:
+    """Walk-forward comparison: each model sees only draws before the forecast."""
+    observations: dict[str, list[int]] = {
+        definition["id"]: [] for definition in MODEL_DEFINITIONS
+    }
+    for index in range(min_training, len(draws)):
+        historical = draws[:index]
+        actual = set(draws[index]["numbers"])
+        for model in _method_rankings(historical):
+            predicted = {row["number"] for row in model["ranked"][:PICK_COUNT]}
+            observations[model["id"]].append(len(predicted & actual))
+
+    tested_draws = max(0, len(draws) - min_training)
+    if tested_draws == 0:
+        return {
+            "available": False,
+            "training_draws": min_training,
+            "tested_draws": 0,
+            "expected_hits": expected_overlap(),
+            "methods": [],
+            "reason": (
+                f"Il faut au moins {min_training + 1} tirages pour commencer "
+                "la comparaison chronologique des trois méthodes."
+            ),
+        }
+
+    methods = []
+    for definition in MODEL_DEFINITIONS:
+        values = observations[definition["id"]]
+        average = sum(values) / len(values)
+        difference = average - expected_overlap()
+        if tested_draws < 20:
+            sample_level = "short"
+            note = "Échantillon très court : résultat purement descriptif."
+        elif tested_draws < 40:
+            sample_level = "exploratory"
+            note = "Comparaison exploratoire ; pas de preuve d'un avantage prédictif."
+        else:
+            sample_level = "monitoring"
+            note = "Suivi hors échantillon ; une différence passée ne garantit pas la suite."
+        methods.append({
+            "id": definition["id"],
+            "label": definition["label"],
+            "tested_draws": len(values),
+            "average_hits": average,
+            "expected_hits": expected_overlap(),
+            "difference": difference,
+            "sample_level": sample_level,
+            "note": note,
+            "hit_distribution": [
+                {"hits": hits, "count": values.count(hits)}
+                for hits in range(PICK_COUNT + 1)
+            ],
+        })
+
+    return {
+        "available": True,
+        "training_draws": min_training,
+        "tested_draws": tested_draws,
+        "expected_hits": expected_overlap(),
+        "methods": methods,
+        "methodology": (
+            "Validation chronologique : chaque méthode est recalculée avec le passé "
+            "uniquement, puis comparée au tirage suivant."
+        ),
+    }
+
 def _backtest(draws: Sequence[dict], min_training: int = 60) -> dict:
     observations = []
     for i in range(min_training, len(draws)):
@@ -242,19 +419,56 @@ def analyze_draws(raw_draws: Iterable[dict]) -> dict:
         {"numbers": [a, b], "count": count}
         for (a, b), count in pair_counts.most_common(15)
     ]
-    ranked = sorted(number_scores, key=lambda x: (-x["score"], x["number"]))
-    suggested = [x["number"] for x in ranked[:PICK_COUNT]]
-    alternatives = []
-    rng = random.Random(f"loto-5-35-{total}-{draws[-1]['date'].isoformat() if total else 'empty'}")
-    # Alternative sets are for exploration, not better-odds combinations.
-    pool = ranked[:18] if total else ranked
-    weights = [max(0.001, row["score"]) for row in pool]
-    for _ in range(2):
-        chosen = set()
-        while len(chosen) < PICK_COUNT:
-            candidate = rng.choices(pool, weights=weights, k=1)[0]["number"]
-            chosen.add(candidate)
-        alternatives.append(sorted(chosen))
+    ranked_base = sorted(number_scores, key=lambda x: (-x["score"], x["number"]))
+    previous_ranks = _build_rank_movements(draws, ranked_base)
+    movement_by_number = {}
+    if previous_ranks["available"]:
+        for row in previous_ranks["up"] + previous_ranks["down"]:
+            movement_by_number[row["number"]] = row
+        # Preserve stable movements for the full ranking too.
+        previous_ranked = _number_scores(draws[:-1])
+        previous_rank_map = {
+            row["number"]: rank
+            for rank, row in enumerate(
+                sorted(previous_ranked, key=lambda item: (-item["score"], item["number"])),
+                start=1,
+            )
+        }
+    else:
+        previous_rank_map = {}
+
+    ranked = []
+    for rank, row in enumerate(ranked_base, start=1):
+        previous_rank = previous_rank_map.get(row["number"])
+        rank_change = previous_rank - rank if previous_rank is not None else None
+        ranked.append({
+            **row,
+            "rank": rank,
+            "score_index": row["score"] / BASE_RATE * 100,
+            "previous_rank": previous_rank,
+            "rank_change": rank_change,
+            "rank_movement": (
+                "up" if rank_change is not None and rank_change > 0
+                else "down" if rank_change is not None and rank_change < 0
+                else "stable" if rank_change is not None
+                else "initial"
+            ),
+        })
+
+    method_rankings = _method_rankings(draws, number_scores)
+    models = []
+    for model in method_rankings:
+        top_rows = model["ranked"][:PICK_COUNT]
+        models.append({
+            "id": model["id"],
+            "label": model["label"],
+            "description": model["description"],
+            "numbers": [row["number"] for row in top_rows],
+            "score_index": sum(row["score_index"] for row in top_rows) / PICK_COUNT,
+            "score_note": "Indice relatif, base 100 ; ce n'est pas une probabilité.",
+        })
+    suggested = models[0]["numbers"]
+    alternatives = [model["numbers"] for model in models[1:]]
 
     transitions_total = len(transitions)
     overlap_p = theoretical_overlap_probability()
@@ -293,10 +507,15 @@ def analyze_draws(raw_draws: Iterable[dict]) -> dict:
         "prediction": {
             "numbers": suggested,
             "ranked": ranked,
+            "models": models,
             "alternatives": alternatives,
-            "method": "Indice exploratoire : historique lissé + récence à demi-vie de 4 tirages.",
+            "movements": previous_ranks,
+            "method": "Historique + récence : score lissé, demi-vie récente de 4 tirages.",
             "baseline_rate": BASE_RATE,
-            "confidence_note": "Indice exploratoire, pas une probabilité de gain. Si le tirage est équitable et indépendant, chaque numéro conserve 1 chance sur 7 à chaque tirage.",
+            "confidence_note": "Les indices servent à classer les numéros ; ils ne sont pas des probabilités de sortie. Un tirage équitable garde les mêmes chances théoriques à chaque date.",
         },
-        "backtest": _backtest(draws),
+        "backtest": {
+            **_backtest(draws),
+            "methods_comparison": _backtest_methods(draws),
+        },
     }

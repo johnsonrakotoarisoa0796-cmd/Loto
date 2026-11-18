@@ -1,5 +1,5 @@
 (() => {
-  const state = { draws: [], analysis: null, forecastHistory: [], csrf: window.LOTO_CSRF || "", editingId: null };
+  const state = { draws: [], analysis: null, forecastHistory: [], contextualStudy: null, contextualLoading: false, csrf: window.LOTO_CSRF || "", editingId: null };
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const numberFmt = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
@@ -45,7 +45,7 @@
   }
 
   function switchView(view) {
-    const allowed = ["overview", "history", "analysis", "prediction"];
+    const allowed = ["overview", "history", "analysis", "prediction", "environment"];
     if (!allowed.includes(view)) return;
     $$(".page").forEach((page) => page.classList.toggle("active", page.id === `view-${view}`));
     $$(".nav-item").forEach((button) => {
@@ -54,10 +54,11 @@
       if (active) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     });
-    const labels = { overview: "Vue d'ensemble", history: "Historique", analysis: "Analyses statistiques", prediction: "Laboratoire de scores" };
+    const labels = { overview: "Vue d'ensemble", history: "Historique", analysis: "Analyses statistiques", prediction: "Laboratoire de scores", environment: "Climat & cosmos" };
     $("#page-crumb").textContent = labels[view];
     history.replaceState(null, "", `#${view}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
+    if (view === "environment" && !state.contextualStudy && !state.contextualLoading) loadContextualStudy();
   }
 
   function renderOverview() {
@@ -135,49 +136,245 @@
       <tr><td>${formatDate(t.from_date)}</td><td>${formatDate(t.to_date)}</td><td>${t.shared_count ? `<div class="ball-row">${t.shared_numbers.map((n) => ball(n, true, true)).join("")}</div>` : `<span class="no-repeat">Aucun numéro commun</span>`}</td><td>${t.calendar_days_apart} jour${t.calendar_days_apart > 1 ? "s" : ""}</td></tr>`).join("") : `<tr><td colspan="4" class="empty-cell">Deux tirages sont nécessaires.</td></tr>`;
   }
 
+
+  function scoreIndex(value) {
+    return value == null ? "—" : Number(value).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " pts";
+  }
+
+  function renderMovementList(rows, selector, direction, available) {
+    const node = $(selector);
+    if (!available) {
+      node.innerHTML = '<div class="empty-state">Il faut au moins deux tirages pour comparer les rangs.</div>';
+      return;
+    }
+    if (!rows.length) {
+      node.innerHTML = '<div class="empty-state">Aucun mouvement de rang dans ce sens après le dernier tirage.</div>';
+      return;
+    }
+    const arrow = direction === "up" ? "↗" : "↘";
+    node.innerHTML = rows.map((row) =>
+      '<div class="movement-row movement-' + direction + '">' +
+        '<span class="movement-ball">' + String(row.number).padStart(2, "0") + '</span>' +
+        '<span class="movement-ranks">#' + row.previous_rank + ' <i>→</i> #' + row.rank + '</span>' +
+        '<strong>' + arrow + ' ' + Math.abs(row.rank_change) + ' place' + (Math.abs(row.rank_change) > 1 ? 's' : '') + '</strong>' +
+      '</div>'
+    ).join("");
+  }
+
   function renderPrediction() {
     const { summary, prediction, backtest } = state.analysis;
-    $("#prediction-combo").innerHTML = prediction.numbers.map((n) => `<span>${String(n).padStart(2, "0")}</span>`).join("　·　");
+    const models = prediction.models || [];
+    const primary = models.find((model) => model.id === "hybrid") || models[0];
+    $("#prediction-combo").innerHTML = prediction.numbers.map((n) => '<span>' + String(n).padStart(2, "0") + '</span>').join("　·　");
+    if (primary) {
+      $("#prediction-method-name").textContent = primary.label;
+      $("#prediction-combo-score").textContent = "Indice moyen de la combinaison : " + scoreIndex(primary.score_index);
+    }
+
     const top = prediction.ranked.slice(0, 15);
     const trendWindow = prediction.ranked[0]?.trend_window || 0;
     const latestDate = summary.latest_date ? formatDate(summary.latest_date) : "aucun tirage";
     let trendLabel = "tendance disponible à partir de 3 tirages";
-    if (summary.draw_count >= 20) trendLabel = `${trendWindow} derniers vs ${trendWindow} précédents`;
-    else if (summary.draw_count >= 10) trendLabel = `${trendWindow} derniers vs ${trendWindow} précédents · signal provisoire`;
-    else if (summary.draw_count >= 3) trendLabel = `historique court · direction disponible après 10 tirages`;
-    $("#ranking-status").textContent = `Recalcul automatique · ${summary.draw_count} tirage(s) · dernier résultat : ${latestDate} · ${trendLabel}`;
-    const min = Math.min(...top.map((x) => x.score));
-    const max = Math.max(...top.map((x) => x.score));
+    if (summary.draw_count >= 20) trendLabel = trendWindow + " derniers vs " + trendWindow + " précédents";
+    else if (summary.draw_count >= 10) trendLabel = trendWindow + " derniers vs " + trendWindow + " précédents · signal provisoire";
+    else if (summary.draw_count >= 3) trendLabel = "historique court · direction disponible après 10 tirages";
+    $("#ranking-status").textContent = "Recalcul automatique · " + summary.draw_count + " tirage(s) · dernier résultat : " + latestDate + " · " + trendLabel;
+    const min = Math.min(...top.map((x) => x.score_index));
+    const max = Math.max(...top.map((x) => x.score_index));
     $("#prediction-ranking").innerHTML = top.map((row, index) => {
-      const width = max === min ? 50 : 16 + (row.score - min) / (max - min) * 84;
-      const movement = row.trend_delta == null
-        ? `${row.recent_window_hits ?? 0}/${row.trend_window || 0} récents`
-        : `${row.trend_delta >= 0 ? "+" : ""}${(row.trend_delta * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} pt`;
-      const arrow = row.trend_direction === "up" ? "↗" : row.trend_direction === "down" ? "↘" : row.trend_direction === "stable" ? "→" : "·";
-      const provisional = row.trend_reliability === "provisional" ? " · provisoire" : "";
-      return `<div class="ranking-row"><span class="rank-index">${String(index + 1).padStart(2, "0")}</span><span class="bar-number">${String(row.number).padStart(2, "0")}</span><div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div><span class="score" title="${row.latest_draw_hit ? "Présent dans le dernier tirage" : "Absent du dernier tirage"}">${pct(row.score, 3)}</span><span class="trend-value trend-${row.trend_direction}" title="${escapeHtml(row.trend_basis || "")} ">${arrow} ${movement}${provisional}</span></div>`;
+      const width = max === min ? 50 : 16 + (row.score_index - min) / (max - min) * 84;
+      const movement = row.rank_change == null
+        ? "premier classement"
+        : row.rank_change > 0 ? "↗ +" + row.rank_change + " place" + (row.rank_change > 1 ? "s" : "")
+        : row.rank_change < 0 ? "↘ " + row.rank_change + " place" + (row.rank_change < -1 ? "s" : "")
+        : "→ stable";
+      const trend = row.trend_direction === "up" ? "↗" : row.trend_direction === "down" ? "↘" : row.trend_direction === "stable" ? "→" : "·";
+      return '<div class="ranking-row">' +
+        '<span class="rank-index">' + String(index + 1).padStart(2, "0") + '</span>' +
+        '<span class="bar-number">' + String(row.number).padStart(2, "0") + '</span>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + width + '%"></div></div>' +
+        '<span class="score" title="Indice relatif base 100, pas une probabilité">' + scoreIndex(row.score_index) + '</span>' +
+        '<span class="trend-value trend-' + row.trend_direction + '" title="' + escapeHtml(row.trend_basis || "") + '">' + trend + ' ' + movement + '</span>' +
+      '</div>';
     }).join("");
-    $("#alternative-combos").innerHTML = prediction.alternatives.map((combo, index) => `
-      <div class="alternative-row"><span>SCÉNARIO ${index + 2}</span><div class="ball-row">${combo.map((n) => ball(n)).join("")}</div></div>`).join("");
-    if (!backtest.available) {
-      $("#backtest-content").innerHTML = `<div class="backtest-message">${escapeHtml(backtest.reason)}<br>Le test sera activé automatiquement quand l'historique sera assez long.</div>`;
+
+    const alternatives = models.filter((model) => model.id !== "hybrid");
+    $("#alternative-combos").innerHTML = alternatives.length ? alternatives.map((model) =>
+      '<section class="method-card">' +
+        '<div class="method-card-head"><div><strong>' + escapeHtml(model.label) + '</strong><p>' + escapeHtml(model.description) + '</p></div>' +
+        '<span class="method-index">' + scoreIndex(model.score_index) + '</span></div>' +
+        '<div class="method-combo">' + model.numbers.map((n) => ball(n, false, true)).join("") + '</div>' +
+        '<small>Indice moyen des 5 numéros · base 100</small>' +
+      '</section>'
+    ).join("") : '<div class="empty-state">Les méthodes alternatives seront affichées après le chargement des données.</div>';
+
+    const movements = prediction.movements || { available: false, up: [], down: [] };
+    renderMovementList(movements.up || [], "#rank-up-movers", "up", movements.available);
+    renderMovementList(movements.down || [], "#rank-down-movers", "down", movements.available);
+
+    const comparison = backtest.methods_comparison;
+    if (!comparison || !comparison.available) {
+      $("#backtest-content").innerHTML = '<div class="backtest-message">' + escapeHtml((comparison && comparison.reason) || backtest.reason || "Le comparatif chronologique est indisponible.") + '</div>';
     } else {
-      const advantage = backtest.model_average_hits - backtest.random_expected_hits;
-      $("#backtest-content").innerHTML = `
-        <div class="backtest-metric"><span>Tirages testés</span><strong>${backtest.tested_draws}</strong></div>
-        <div class="backtest-metric"><span>Moyenne du modèle</span><strong>${backtest.model_average_hits.toFixed(2).replace(".", ",")} / 5</strong></div>
-        <div class="backtest-metric"><span>Référence aléatoire</span><strong>${backtest.random_expected_hits.toFixed(2).replace(".", ",")} / 5</strong></div>
-        <div class="backtest-message">Écart observé : ${advantage >= 0 ? "+" : ""}${advantage.toFixed(2).replace(".", ",")} numéro(s) par tirage. ${escapeHtml(backtest.warning || "")} Ce résultat historique n'est pas une garantie de performance future.</div>`;
+      const methodRows = comparison.methods.map((model) => {
+        const difference = model.difference;
+        const direction = difference > 0.000001 ? "positive" : difference < -0.000001 ? "negative" : "neutral";
+        const signed = (difference > 0 ? "+" : "") + difference.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+        return '<tr>' +
+          '<td><strong>' + escapeHtml(model.label) + '</strong><small>' + escapeHtml(model.note) + '</small></td>' +
+          '<td>' + model.tested_draws + '</td>' +
+          '<td><strong>' + model.average_hits.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' / 5</strong></td>' +
+          '<td>' + model.expected_hits.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' / 5</td>' +
+          '<td class="backtest-' + direction + '">' + signed + '</td>' +
+        '</tr>';
+      }).join("");
+      const caveat = comparison.tested_draws < 20
+        ? "Le nombre de tests est encore très insuffisant pour conclure."
+        : comparison.tested_draws < 40
+          ? "Il faut davantage de prévisions indépendantes pour une évaluation plus informative."
+          : "Continuer le suivi prospectif avant toute conclusion.";
+      $("#backtest-content").innerHTML =
+        '<div class="backtest-summary">' +
+          '<span><strong>' + comparison.tested_draws + '</strong> prévision(s) hors échantillon par méthode</span>' +
+          '<span>Apprentissage initial : ' + comparison.training_draws + ' tirages</span>' +
+          '<span>Référence aléatoire : ' + comparison.expected_hits.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' / 5</span>' +
+        '</div>' +
+        '<div class="table-scroll"><table class="model-comparison-table">' +
+          '<thead><tr><th>MÉTHODE</th><th>TESTS</th><th>MOYENNE OBSERVÉE</th><th>HASARD ATTENDU</th><th>ÉCART</th></tr></thead>' +
+          '<tbody>' + methodRows + '</tbody>' +
+        '</table></div>' +
+        '<p class="micro-note">' + escapeHtml(comparison.methodology || "") + ' Une différence positive sur un petit échantillon n’est pas une preuve d’avantage prédictif. ' + caveat + '</p>';
     }
 
     const forecasts = state.forecastHistory;
-    $("#forecast-count").textContent = `${forecasts.length} ENREGISTRÉE${forecasts.length > 1 ? "S" : ""}`;
-    $("#forecast-history-body").innerHTML = forecasts.length ? forecasts.map((item) => `
-      <tr><td>${formatDate(item.based_on_latest_date)}<br><small>${item.based_on_draw_count} tirages disponibles</small></td>
-      <td><div class="ball-row">${item.numbers.map((n) => ball(n, false, true)).join("")}</div></td>
-      <td>${item.actual_draw_date ? formatDate(item.actual_draw_date) : `<span class="no-repeat">En attente du prochain tirage</span>`}</td>
-      <td>${item.actual_numbers ? `<div class="ball-row">${item.actual_numbers.map((n) => ball(n, item.numbers.includes(n), true)).join("")}</div>` : "—"}</td>
-      <td>${item.evaluated ? `<strong>${item.hits}/5</strong>` : "—"}</td></tr>`).join("") : `<tr><td colspan="5" class="empty-cell">Enregistre ton premier pronostic pour commencer à mesurer le modèle.</td></tr>`;
+    $("#forecast-count").textContent = forecasts.length + " ENREGISTRÉE" + (forecasts.length > 1 ? "S" : "");
+    $("#forecast-history-body").innerHTML = forecasts.length ? forecasts.map((item) =>
+      '<tr><td>' + formatDate(item.based_on_latest_date) + '<br><small>' + item.based_on_draw_count + ' tirages disponibles</small></td>' +
+      '<td><div class="ball-row">' + item.numbers.map((n) => ball(n, false, true)).join("") + '</div></td>' +
+      '<td>' + (item.actual_draw_date ? formatDate(item.actual_draw_date) : '<span class="no-repeat">En attente du prochain tirage</span>') + '</td>' +
+      '<td>' + (item.actual_numbers ? '<div class="ball-row">' + item.actual_numbers.map((n) => ball(n, item.numbers.includes(n), true)).join("") + '</div>' : "—") + '</td>' +
+      '<td>' + (item.evaluated ? '<strong>' + item.hits + '/5</strong>' : "—") + '</td></tr>'
+    ).join("") : '<tr><td colspan="5" class="empty-cell">Enregistre ton premier pronostic pour commencer à mesurer le modèle.</td></tr>';
+  }
+
+
+  function renderContextualGroups(rows, selector) {
+    const node = $(selector);
+    if (!rows || !rows.length) {
+      node.innerHTML = '<tr><td colspan="4" class="empty-cell">Aucune donnée disponible pour le moment.</td></tr>';
+      return;
+    }
+    node.innerHTML = rows.map((row) =>
+      '<tr><td>' + escapeHtml(row.label) + '</td><td>' + row.draw_count + '</td>' +
+      '<td>' + numberFmt.format(row.average_draw_sum) + '</td><td>' +
+      numberFmt.format(row.average_odd_count) + '</td></tr>'
+    ).join("");
+  }
+
+  function renderContextualStudy(data) {
+    const meta = data.meta || {};
+    const configWarning = $("#context-config-warning");
+    $("#context-sample-count").textContent = numberFmt.format(meta.draw_count || 0);
+    $("#context-sample-level").textContent = meta.sample_level === "monitoring"
+      ? "Suivi élargi · interprétation prudente"
+      : meta.sample_level === "exploratory"
+        ? "Étude exploratoire · échantillon limité"
+        : "Échantillon insuffisant pour conclure";
+    $("#context-weather-status").textContent = !meta.location_configured
+      ? "À configurer"
+      : meta.weather_available ? "Disponible" : "Indisponible";
+    $("#context-seismic-status").textContent = !meta.location_configured
+      ? "À configurer"
+      : meta.seismic_available ? "Disponible" : "Indisponible";
+    $("#context-location").textContent = meta.location_name || "Non configuré";
+    $("#context-seismic-radius").textContent = meta.seismic_radius_km
+      ? "Rayon : " + numberFmt.format(meta.seismic_radius_km) + " km · magnitude ≥ " + numberFmt.format(meta.seismic_min_magnitude)
+      : "Événements autour du lieu du tirage";
+
+    const timeNotice = meta.timezone_assumed_utc
+      ? " L'heure " + (meta.draw_time || "16:35") + " est provisoirement interprétée en UTC : vérifie DRAW_TIMEZONE dans Render."
+      : " Référence horaire : " + (meta.draw_time || "16:35") + " (" + (meta.timezone || "fuseau configuré") + ").";
+    const notices = [];
+    if (meta.location_is_estimate) {
+      notices.push("Lieu provisoire : centre du quartier Antaninarenina à Antananarivo, utilisé comme approximation parce que le site exact n'a pas été confirmé. Vérifie que le tirage correspond bien au Loto 5/35 Bet261 ; remplace DRAW_LOCATION_LAT, DRAW_LOCATION_LON et DRAW_LOCATION_NAME dans Render et règle DRAW_LOCATION_IS_ESTIMATE=false si nécessaire.");
+    }
+    if (meta.weather_error || meta.seismic_error) {
+      notices.push([meta.weather_error, meta.seismic_error].filter(Boolean).join(" "));
+    }
+    if (meta.timezone_assumed_utc) notices.push(timeNotice.trim());
+    if (!meta.location_configured) {
+      notices.push("Les coordonnées du lieu du tirage ne sont pas configurées. Ajoute DRAW_LOCATION_LAT et DRAW_LOCATION_LON dans Render > Environment.");
+    }
+    configWarning.hidden = notices.length === 0;
+    configWarning.textContent = notices.join(" ") + (notices.length ? timeNotice : "");
+
+    const correlations = data.correlations || {};
+    $("#context-test-count").textContent = (correlations.tests_count || 0) + " TEST" + ((correlations.tests_count || 0) > 1 ? "S" : "");
+    $("#context-correlation-method").textContent = (correlations.method || "") + " " + (meta.sample_note || "");
+    const results = correlations.results || [];
+    $("#context-correlation-body").innerHTML = results.length ? results.map((row) => {
+      const isMarked = row.p_adjusted != null && row.p_adjusted <= 0.05;
+      return '<tr><td><strong>' + escapeHtml(row.factor_label) + '</strong></td>' +
+        '<td>' + escapeHtml(row.outcome_label) + '</td><td>' + row.sample_size + '</td>' +
+        '<td>' + Number(row.spearman_rho).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + '</td>' +
+        '<td>' + (row.p_adjusted == null ? "—" : Number(row.p_adjusted).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })) + '</td>' +
+        '<td><span class="context-result-label ' + (isMarked ? "context-replicate" : "context-neutral") + '">' +
+          (isMarked ? "À répliquer" : "Non concluant") + '</span></td></tr>';
+    }).join("") : '<tr><td colspan="6" class="empty-cell">' +
+      (meta.draw_count < 30 ? "Il faut au moins 30 tirages pour lancer les tests exploratoires." :
+        "Aucune corrélation calculable : vérifie les données météo et les coordonnées du lieu.") +
+      '</td></tr>';
+
+    renderContextualGroups(data.zodiac_groups || [], "#context-zodiac-body");
+    renderContextualGroups(data.moon_groups || [], "#context-moon-body");
+
+    const rows = data.rows || [];
+    $("#context-history-body").innerHTML = rows.length ? rows.map((row) => {
+      const weather = (value, suffix = "") => value == null ? "—" :
+        Number(value).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + suffix;
+      const seismicCount = row.earthquake_count == null ? "—" : row.earthquake_count;
+      return '<tr><td>' + formatDate(row.date) + '<small>' + escapeHtml(row.reference_time_local || meta.draw_time || "16:35") + '</small></td>' +
+        '<td><strong>' + escapeHtml(row.zodiac_sign) + '</strong><small>' + escapeHtml(row.moon_phase) +
+        ' · ' + Math.round((row.moon_illumination || 0) * 100) + '%</small></td>' +
+        '<td>' + weather(row.temperature_2m_at_draw_hour ?? row.temperature_2m_mean, "°") + '</td>' +
+        '<td>' + weather(row.relative_humidity_2m_at_draw_hour ?? row.relative_humidity_2m_mean, " %") + '</td>' +
+        '<td>' + weather(row.precipitation_at_draw_hour ?? row.precipitation_sum, " mm") + '</td>' +
+        '<td>' + weather(row.pressure_msl_at_draw_hour ?? row.pressure_msl_mean, " hPa") + '</td>' +
+        '<td>' + weather(row.wind_speed_10m_at_draw_hour ?? row.wind_speed_10m_max, " km/h") + '</td>' +
+        '<td>' + seismicCount + '</td>' +
+        '<td>' + weather(row.nearest_distance_km, " km") + '</td>' +
+        '<td>' + weather(row.nearest_depth_km, " km") + '</td>' +
+        '<td>' + weather(row.max_magnitude) + '</td>' +
+        '<td><strong>' + row.draw_sum + '</strong></td></tr>';
+    }).join("") : '<tr><td colspan="12" class="empty-cell">Aucun tirage enregistré.</td></tr>';
+
+    $("#context-methodology-note").textContent = [
+      data.methodology && data.methodology.astrology,
+      data.methodology && data.methodology.astronomy,
+      data.methodology && data.methodology.weather,
+      data.methodology && data.methodology.seismic,
+      data.methodology && data.methodology.prediction_policy
+    ].filter(Boolean).join(" ");
+  }
+
+  async function loadContextualStudy(force = false) {
+    if (state.contextualLoading) return;
+    if (state.contextualStudy && !force) {
+      renderContextualStudy(state.contextualStudy);
+      return;
+    }
+    state.contextualLoading = true;
+    $("#context-correlation-body").innerHTML = '<tr><td colspan="6" class="empty-cell">Récupération des archives météo et du catalogue sismique…</td></tr>';
+    try {
+      const result = await api("/api/contextual-study");
+      state.contextualStudy = result;
+      renderContextualStudy(result);
+    } catch (error) {
+      $("#context-correlation-body").innerHTML = '<tr><td colspan="6" class="empty-cell">' + escapeHtml(error.message) + '</td></tr>';
+      toast("Impossible de charger le laboratoire externe : " + error.message, true);
+    } finally {
+      state.contextualLoading = false;
+    }
   }
 
   function renderAll() {
@@ -303,6 +500,7 @@
     $("#import-trigger").addEventListener("click", () => $("#csv-file").click());
     $("#csv-file").addEventListener("change", (event) => importFile(event.target.files[0]));
     $("#save-prediction").addEventListener("click", recordPrediction);
+    if ($("#context-refresh")) $("#context-refresh").addEventListener("click", () => loadContextualStudy(true));
     if ($("#logout-button")) {
       $("#logout-button").addEventListener("click", async () => {
         try { await api("/logout", { method: "POST" }); window.location.href = "/login"; }
@@ -310,7 +508,7 @@
       });
     }
     const initialView = location.hash.slice(1);
-    if (["overview", "history", "analysis", "prediction"].includes(initialView)) switchView(initialView);
+    if (["overview", "history", "analysis", "prediction", "environment"].includes(initialView)) switchView(initialView);
   }
 
   document.addEventListener("DOMContentLoaded", () => {

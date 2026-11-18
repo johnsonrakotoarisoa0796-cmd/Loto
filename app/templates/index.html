@@ -26,7 +26,7 @@
   <link rel="stylesheet" href="/static/style.css">
   <script>window.LOTO_CSRF = {{ csrf_token | tojson }};</script>
   <script src="/static/theme.js" defer></script>
-  <script src="/static/app.js?v=1.1.3" defer></script>
+  <script src="/static/app.js?v=1.3.0" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -41,6 +41,7 @@
         <button class="nav-item" data-view="history"><span class="nav-icon">▤</span>Historique <span class="nav-count" id="nav-draw-count">0</span></button>
         <button class="nav-item" data-view="analysis"><span class="nav-icon">⌁</span>Analyses statistiques</button>
         <button class="nav-item" data-view="prediction"><span class="nav-icon">✳</span>Laboratoire de scores</button>
+        <button class="nav-item" data-view="environment"><span class="nav-icon">☼</span>Climat & cosmos</button>
         <a class="nav-item science-link" href="/science" title="Audit scientifique"><span class="nav-icon">⚛</span>Audit scientifique</a>
       </nav>
       <div class="sidebar-bottom">
@@ -51,7 +52,7 @@
         {% if password_protected %}
         <form method="post" action="/logout" id="logout-form"><input type="hidden" name="csrf" value=""><button class="logout-btn" type="button" id="logout-button">↪ Déconnexion</button></form>
         {% endif %}
-        <div class="version">LOTO LAB <span>·</span> 1.1.3</div>
+        <div class="version">LOTO LAB <span>·</span> 1.3.0</div>
       </div>
     </aside>
 
@@ -131,16 +132,39 @@
 
       <section class="page" id="view-prediction">
         <div class="page-heading"><div><p class="eyebrow">LABORATOIRE EXPÉRIMENTAL</p><h1>Scores & tendances<span class="period-dot">.</span></h1><p class="subheading">Un classement exploratoire construit uniquement à partir des tirages enregistrés.</p></div><span class="pill pill-warning">EXPÉRIMENTAL</span></div>
-        <div class="prediction-banner"><div class="prediction-orbit">✳</div><div><span class="eyebrow">COMBINAISON CLASSÉE PAR LE MODÈLE</span><h2 id="prediction-combo">—</h2><p>Classement statistique lissé — pas une prédiction certaine ni une amélioration démontrée des chances.</p></div><div class="prediction-method"><span>MÉTHODE</span><strong>Historique + récence</strong><small>Prior centré sur 1/7</small><button class="btn btn-secondary btn-sm" id="save-prediction">＋ Enregistrer ce pronostic</button></div></div>
+        <div class="prediction-banner"><div class="prediction-orbit">✳</div><div class="prediction-main"><span class="eyebrow">COMBINAISON DU MODÈLE PRINCIPAL</span><h2 id="prediction-combo">—</h2><p>Classement hybride : historique lissé + récence récente. Ce score ne représente pas une probabilité de gain.</p></div><div class="prediction-method"><span>MODÈLE PRINCIPAL</span><strong id="prediction-method-name">Historique + récence</strong><small id="prediction-combo-score">Indice moyen : —</small><small class="score-disclaimer">Indice relatif · base 100 · non probabiliste</small><button class="btn btn-secondary btn-sm" id="save-prediction">＋ Enregistrer ce pronostic</button></div></div>
         <div class="prediction-grid">
-          <article class="panel"><div class="panel-header"><div><p class="eyebrow">CLASSEMENT</p><h2>Top 15 des scores</h2><p class="panel-sub" id="ranking-status">Recalcul automatique après chaque ajout, modification ou suppression de tirage.</p></div></div><div id="prediction-ranking" class="ranking-list"></div></article>
-          <article class="panel"><div class="panel-header"><div><p class="eyebrow">AUTRES COMBINAISONS</p><h2>Scénarios alternatifs</h2><p class="panel-sub">Variantes générées à partir des scores historiques.</p></div></div><div id="alternative-combos" class="alternative-list"></div><div class="model-caveat"><strong>À ne pas confondre</strong><p>Chaque combinaison de 5 numéros distincts a exactement la même probabilité théorique : 1 sur 324 632, si le tirage est uniforme.</p></div></article>
+          <article class="panel"><div class="panel-header"><div><p class="eyebrow">CLASSEMENT PRINCIPAL</p><h2>Top 15 des scores</h2><p class="panel-sub" id="ranking-status">Recalcul automatique après chaque ajout, modification ou suppression de tirage.</p></div></div><div id="prediction-ranking" class="ranking-list"></div><p class="micro-note">Indice relatif : 100 correspond au niveau de référence 1/7. Ce n'est pas une probabilité de sortie.</p></article>
+          <article class="panel"><div class="panel-header"><div><p class="eyebrow">MÉTHODES INDÉPENDANTES</p><h2>Scénarios alternatifs</h2><p class="panel-sub">Deux classements distincts du modèle principal, calculés avec des règles fixes.</p></div></div><div id="alternative-combos" class="method-card-list"></div><div class="model-caveat"><strong>À ne pas confondre</strong><p>Ces méthodes explorent différemment l'historique. Elles ne changent pas les chances théoriques : chaque combinaison reste à 1 sur 324 632 sous le modèle uniforme.</p></div></article>
+        </div>
+        <div class="movement-grid">
+          <article class="panel movement-panel"><div class="panel-header"><div><p class="eyebrow">ÉVOLUTION APRÈS LE DERNIER TIRAGE</p><h2>Numéros en progression</h2><p class="panel-sub">Meilleures remontées dans le classement hybride.</p></div></div><div id="rank-up-movers" class="movement-list"></div></article>
+          <article class="panel movement-panel"><div class="panel-header"><div><p class="eyebrow">ÉVOLUTION APRÈS LE DERNIER TIRAGE</p><h2>Numéros en recul</h2><p class="panel-sub">Plus fortes baisses dans le classement hybride.</p></div></div><div id="rank-down-movers" class="movement-list"></div></article>
         </div>
         <article class="panel prediction-history-panel"><div class="panel-header"><div><p class="eyebrow">SUIVI RÉEL DES PRÉVISIONS</p><h2>Prévisions enregistrées</h2><p class="panel-sub">Chaque prévision enregistrée sera comparée au premier tirage ajouté après sa date de référence.</p></div><span class="pill pill-neutral" id="forecast-count">0 ENREGISTRÉE</span></div><div class="table-scroll"><table><thead><tr><th>CRÉÉE SUR LA BASE DU</th><th>NUMÉROS PROPOSÉS</th><th>TIRAGE SUIVANT</th><th>NUMÉROS RÉELS</th><th>TOUCHÉS</th></tr></thead><tbody id="forecast-history-body"><tr><td colspan="5" class="empty-cell">Aucune prévision enregistrée pour l'instant.</td></tr></tbody></table></div></article>
-        <article class="panel backtest-panel"><div class="panel-header"><div><p class="eyebrow">CONTRÔLE DU MODÈLE</p><h2>Test rétrospectif</h2><p class="panel-sub">Le modèle prédit chaque tirage uniquement avec les données antérieures.</p></div><span class="pill pill-neutral">SANS FUITE DE DONNÉES</span></div><div id="backtest-content" class="backtest-content"></div></article>
+        <article class="panel backtest-panel"><div class="panel-header"><div><p class="eyebrow">VALIDATION CHRONOLOGIQUE</p><h2>Comparer les trois méthodes</h2><p class="panel-sub">Chaque prévision est calculée avec les seuls tirages disponibles avant le résultat évalué.</p></div><span class="pill pill-neutral">SANS FUITE DE DONNÉES</span></div><div id="backtest-content" class="backtest-content"></div></article>
         <div class="data-note"><span>⚑</span><span>Le classement sert à explorer les données. Il ne rend pas un numéro « dû » et ne doit pas guider une mise d'argent importante.</span></div>
       </section>
 
+      <section class="page" id="view-environment">
+        <div class="page-heading"><div><p class="eyebrow">LABORATOIRE EXOGÈNE</p><h1>Climat & cosmos<span class="period-dot">.</span></h1><p class="subheading">Étude séparée des cycles lunaires, signes symboliques, conditions météo et événements sismiques autour des dates de tirage.</p></div><button class="btn btn-secondary" id="context-refresh">↻ Actualiser l'étude</button></div>
+        <div class="analysis-callout context-callout"><span class="callout-icon">ⓘ</span><div><strong>Recherche exploratoire — pas un moteur de prédiction.</strong><p>Les variables externes ne modifient jamais les combinaisons proposées. Une corrélation observée ne prouve ni causalité ni capacité à prévoir le prochain tirage.</p></div></div>
+        <div id="context-config-warning" class="context-config-warning" hidden></div>
+        <div class="context-kpi-grid">
+          <article class="stat-card"><div class="stat-top"><span>Historique étudié</span><span class="stat-icon purple">▤</span></div><div class="stat-value" id="context-sample-count">—</div><div class="stat-foot" id="context-sample-level">Tirages analysés</div></article>
+          <article class="stat-card"><div class="stat-top"><span>Archives météo</span><span class="stat-icon cyan">☁</span></div><div class="stat-value context-status-value" id="context-weather-status">—</div><div class="stat-foot">Open-Meteo · réanalyse historique</div></article>
+          <article class="stat-card"><div class="stat-top"><span>Catalogue sismique</span><span class="stat-icon orange">⌁</span></div><div class="stat-value context-status-value" id="context-seismic-status">—</div><div class="stat-foot" id="context-seismic-radius">Événements autour du lieu du tirage</div></article>
+          <article class="stat-card"><div class="stat-top"><span>Lieu d'étude</span><span class="stat-icon green">◎</span></div><div class="stat-value context-place-value" id="context-location">Non configuré</div><div class="stat-foot">Coordonnées du site officiel du tirage</div></article>
+        </div>
+        <div class="context-grid">
+          <article class="panel context-wide"><div class="panel-header"><div><p class="eyebrow">TESTS STATISTIQUES</p><h2>Corrélations exploratoires</h2><p class="panel-sub">Corrélation de Spearman, tests par permutation et correction Holm des comparaisons multiples.</p></div><span class="pill pill-neutral" id="context-test-count">0 TEST</span></div><div class="table-scroll"><table class="context-table"><thead><tr><th>FACTEUR EXTERNE</th><th>MESURE DU TIRAGE</th><th>ÉCHANTILLON</th><th>RHO</th><th>P AJUSTÉE</th><th>LECTURE</th></tr></thead><tbody id="context-correlation-body"><tr><td colspan="6" class="empty-cell">Chargement de l'étude…</td></tr></tbody></table></div><p class="micro-note" id="context-correlation-method"></p></article>
+          <article class="panel"><div class="panel-header"><div><p class="eyebrow">ASTROLOGIE SYMBOLIQUE</p><h2>Signes zodiacaux</h2><p class="panel-sub">Somme moyenne des cinq numéros par signe solaire. Statistique descriptive uniquement.</p></div></div><div class="table-scroll"><table class="context-small-table"><thead><tr><th>SIGNE</th><th>TIRAGES</th><th>SOMME MOY.</th><th>IMPAIRS</th></tr></thead><tbody id="context-zodiac-body"></tbody></table></div></article>
+          <article class="panel"><div class="panel-header"><div><p class="eyebrow">ASTRONOMIE</p><h2>Phases lunaires</h2><p class="panel-sub">Éclairement approximatif le jour du tirage et somme moyenne observée.</p></div></div><div class="table-scroll"><table class="context-small-table"><thead><tr><th>PHASE</th><th>TIRAGES</th><th>SOMME MOY.</th><th>IMPAIRS</th></tr></thead><tbody id="context-moon-body"></tbody></table></div></article>
+        </div>
+        <article class="panel context-history-panel"><div class="panel-header"><div><p class="eyebrow">DONNÉES PAR DATE</p><h2>Contexte de chaque tirage</h2><p class="panel-sub">Cycles célestes, météo autour de 16:00 locale (proxy pour 16:35) et activité sismique cataloguée.</p></div></div><div class="table-scroll"><table class="context-history-table"><thead><tr><th>DATE / HEURE DU TIRAGE</th><th>SIGNE / LUNE</th><th>TEMP. ~16H °C</th><th>HUMIDITÉ ~16H %</th><th>PLUIE H−1 mm</th><th>PRESSION ~16H hPa</th><th>VENT ~16H km/h</th><th>SÉISMES</th><th>DIST. MIN. km</th><th>PROFONDEUR km</th><th>MAG. MAX.</th><th>SOMME</th></tr></thead><tbody id="context-history-body"><tr><td colspan="12" class="empty-cell">Chargement…</td></tr></tbody></table></div></article>
+        <div class="data-note"><span>⚑</span><span id="context-methodology-note">Les sources et limites de la méthode seront affichées après le chargement.</span></div>
+        <div class="context-sources"><strong>Sources :</strong> <a href="https://open-meteo.com/en/docs/historical-weather-api" target="_blank" rel="noopener">Open-Meteo Historical Weather</a> · <a href="https://earthquake.usgs.gov/fdsnws/event/1/" target="_blank" rel="noopener">USGS Earthquake Catalog</a>. Les archives météo sont des données de réanalyse ; le catalogue USGS ne fournit pas ici de forme d'onde sismique mesurée sur place.</div>
+      </section>
       <footer class="app-footer"><span>LOTO LAB · OUTIL D'ANALYSE PERSONNELLE</span><span>Les tirages aléatoires sont indépendants.</span></footer>
     </main>
   </div>

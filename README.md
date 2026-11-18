@@ -8,7 +8,14 @@ Application web en français pour enregistrer les tirages 5/35 et suivre les fr�
 - Import CSV et export CSV de tout l'historique.
 - Tableau de bord : volume de données, fréquences, dernier résultat et répétitions entre dates calendaires consécutives.
 - Analyses : fréquences des 35 numéros, retours au tirage enregistré suivant, paires récurrentes et distribution des numéros communs.
-- Scores exploratoires recalculés après chaque changement de l’historique ; la tendance ne donne pas de direction avant 10 tirages, compare ensuite deux fenêtres de 5 tirages et utilise un seuil de 20 points pour limiter les faux signaux sur de petits échantillons.
+- Laboratoire multi-modèles : trois classements distincts et fixes (historique + récence, fréquence globale lissée, récence courte) avec indices relatifs base 100, jamais interprétés comme des probabilités.
+- Évolution des rangs : comparaison du classement hybride courant avec celui calculé avant le dernier tirage, pour afficher les numéros en progression et en recul.
+- Scénarios alternatifs issus des deux autres modèles statistiques, et non de combinaisons pseudo-aléatoires.
+- Backtest chronologique comparant les trois méthodes à la référence aléatoire de 0,714 numéro touché en moyenne par combinaison de cinq. L'apprentissage commence après 30 tirages ; les résultats sont explicitement qualifiés de très courts ou exploratoires lorsque l'échantillon de test est petit.
+- Tendances directionnelles : comparaison de deux fenêtres de 5 tirages à partir de 10 tirages, avec un seuil fixe pour limiter les faux signaux sur de petits échantillons.
+- Laboratoire climat & cosmos : signe zodiacal symbolique, phase lunaire approximative, archives météo Open-Meteo et événements sismiques du catalogue USGS autour du lieu du tirage.
+- Étude de corrélations exploratoires : indicateurs du tirage (somme, amplitude, parité, petits/grands numéros, répétitions) comparés aux variables externes par Spearman, permutation déterministe et correction de Holm.
+- Les variables exogènes ne sont jamais intégrées aux pronostics. Un signal éventuel doit être répliqué sur des tirages futurs ; l'astrologie est présentée comme symbolique, pas comme un facteur scientifiquement validé.
 - Audit scientifique : tests exacts des 35 fréquences et 595 paires, contrôle Holm-Bonferroni des comparaisons multiples, dépendances aux retards 1 à 5 et validation chronologique hors échantillon.
 - Thème Automatique / Clair / Sombre, mémorisé dans le navigateur et synchronisé entre la connexion, le tableau de bord et l’audit scientifique.
 - Enregistrement horodaté des pronostics et évaluation automatique contre le premier tirage suivant.
@@ -42,6 +49,34 @@ uvicorn app.main:app --reload
 Ouvre ensuite `http://127.0.0.1:8000`. Le sélecteur **Apparence** en haut de l’écran permet de choisir Automatique, Clair ou Sombre ; le choix est conservé dans ce navigateur. L’audit scientifique est disponible à `/science`.
 
 Pour un essai local sans écran de connexion, laisse `APP_PASSWORD` vide. Ne fais pas cela pour une instance publique.
+
+
+### Laboratoire climat & cosmos
+
+La page **Climat & cosmos** étudie le contexte associé aux dates historiques des tirages. Les variables restent séparées du moteur de prédiction.
+
+Pour activer les données météorologiques et sismiques, ajoute au fichier .env local ou à **Render → Environment** les variables suivantes :
+
+~~~env
+DRAW_LOCATION_NAME=Antaninarenina, Antananarivo (approximatif)
+DRAW_LOCATION_LAT=-18.9103
+DRAW_LOCATION_LON=47.52502
+DRAW_LOCATION_IS_ESTIMATE=true
+DRAW_TIME=16:35
+DRAW_TIMEZONE=Indian/Antananarivo
+SEISMIC_RADIUS_KM=200
+SEISMIC_MIN_MAGNITUDE=2.5
+~~~
+
+Le réglage initial est **provisoire** : la documentation Bet261 indique que le Loto 5/35 peut être suivi en direct à Antaninarenina. Le point géographique utilisé correspond au centre approximatif du quartier (pas à l'emplacement vérifié d'une machine de tirage). Il doit être remplacé dans **Render → Environment** si l'opérateur ou le lieu officiel est différent. Après remplacement des coordonnées, règle DRAW_LOCATION_IS_ESTIMATE=false. Les coordonnées du lieu de tirage ne doivent jamais être remplacées par celles de l'utilisateur ou du serveur. Le fuseau par défaut est Indian/Antananarivo et l'heure de référence est 16:35.
+
+- **Météo :** l'API historique Open-Meteo fournit des données quotidiennes de réanalyse (température, humidité, pression, précipitations, vent et couverture nuageuse). Ces valeurs sont des estimations sur une grille, pas des mesures garanties à l'adresse exacte. Documentation : https://open-meteo.com/en/docs/historical-weather-api
+- **Sismicité :** le catalogue USGS fournit les événements, magnitudes, profondeurs, lieux et distances dans le rayon demandé. Les dates sont ramenées au fuseau configuré. Il s'agit d'un catalogue d'événements, pas d'enregistrements de forme d'onde ou d'accélération du sol. Documentation : https://earthquake.usgs.gov/fdsnws/event/1/
+- **Astronomie :** la phase lunaire et l'éclairement sont des approximations calculées à l'heure officielle du tirage, par défaut 16:35 heure de Madagascar. Indian/Antananarivo convertit cette heure locale vers UTC ; un autre fuseau IANA peut être configuré dans Render si le tirage est effectué ailleurs.
+- **Astrologie :** le signe solaire est une étiquette zodiacale conventionnelle. Les résultats par signe sont descriptifs et ne constituent pas une preuve d'influence.
+- **Statistiques :** les corrélations de Spearman utilisent des p-values par permutation déterministe, puis une correction de Holm pour les tests multiples. En dessous de 30 tirages, le rapport n'effectue pas de batterie de corrélations. Un résultat significatif reste une piste à répliquer, jamais un signal prédictif acquis.
+
+Les archives externes sont mises en cache en mémoire pendant six heures. Aucune nouvelle table de base ni migration SQL n'est créée pour cette étude.
 
 ## CSV
 
@@ -125,13 +160,14 @@ Le classement combine les fréquences historiques et une composante récente plu
 .
 ├── analysis_engine.py       # Statistiques descriptives et classement exploratoire
 ├── scientific_engine.py     # Audit scientifique et validation hors échantillon
+├── contextual_study.py      # Astrologie symbolique, Lune, météo et catalogue sismique
 ├── app/
 │   ├── database.py          # SQLAlchemy / SQLite / PostgreSQL
 │   ├── main.py              # API FastAPI, import/export, authentification
 │   ├── templates/           # Interface HTML
 │   └── static/              # CSS, JavaScript et thème partagé
 │       └── theme.js         # Apparence Auto / Clair / Sombre
-├── tests/                   # Tests statistiques et tests de l’audit
+├── tests/                   # Tests statistiques, audit et contexte externe
 ├── render.yaml
 ├── requirements.txt
 ├── INSTALLER-LOTO-LAB-PRO.ps1

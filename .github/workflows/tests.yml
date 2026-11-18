@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: ["main", "fix/**"]
+    branches: ["main", "fix/**", "feat/**"]
   pull_request:
     branches: ["main"]
 
@@ -21,3 +21,7 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Run test suite
         run: pytest -q
+      - name: Compile Python modules
+        run: python -m compileall -q app analysis_engine.py scientific_engine.py contextual_study.py
+      - name: Check frontend JavaScript syntax
+        run: node --check app/static/app.js
