@@ -82,9 +82,16 @@ def _draw_time_config() -> tuple[datetime_time, str]:
     raw_time = os.getenv("DRAW_TIME", "16:35").strip() or "16:35"
     try:
         draw_time = datetime_time.fromisoformat(raw_time)
+        if draw_time.tzinfo is not None:
+            raise ValueError("DRAW_TIME must be local wall-clock time without a UTC offset.")
     except ValueError:
         draw_time = datetime_time(16, 35)
     timezone_name = os.getenv("DRAW_TIMEZONE", "auto").strip() or "auto"
+    if timezone_name != "auto":
+        try:
+            ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            timezone_name = "auto"
     return draw_time.replace(second=0, microsecond=0), timezone_name
 
 
