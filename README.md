@@ -61,6 +61,7 @@ Pour activer les données météorologiques et sismiques, ajoute au fichier .env
 DRAW_LOCATION_NAME=Lieu réel du tirage
 DRAW_LOCATION_LAT=latitude_du_site
 DRAW_LOCATION_LON=longitude_du_site
+DRAW_TIME=16:35
 DRAW_TIMEZONE=Fuseau_IANA_du_site
 SEISMIC_RADIUS_KM=200
 SEISMIC_MIN_MAGNITUDE=2.5
@@ -70,7 +71,7 @@ Les deux coordonnées doivent correspondre au **lieu physique où le tirage offi
 
 - **Météo :** l'API historique Open-Meteo fournit des données quotidiennes de réanalyse (température, humidité, pression, précipitations, vent et couverture nuageuse). Ces valeurs sont des estimations sur une grille, pas des mesures garanties à l'adresse exacte. Documentation : https://open-meteo.com/en/docs/historical-weather-api
 - **Sismicité :** le catalogue USGS fournit les événements, magnitudes, profondeurs, lieux et distances dans le rayon demandé. Les dates sont ramenées au fuseau configuré. Il s'agit d'un catalogue d'événements, pas d'enregistrements de forme d'onde ou d'accélération du sol. Documentation : https://earthquake.usgs.gov/fdsnws/event/1/
-- **Astronomie :** la phase lunaire et l'éclairement sont des approximations calculées à midi UTC à partir du mois synodique moyen.
+- **Astronomie :** la phase lunaire et l'éclairement sont des approximations calculées à l'heure officielle du tirage, par défaut 16:35 heure locale. DRAW_TIMEZONE convertit cette heure locale vers UTC. Tant que le fuseau réel n'est pas configuré (valeur `auto`), le calcul interprète provisoirement 16:35 comme UTC et l'interface l'indique explicitement.
 - **Astrologie :** le signe solaire est une étiquette zodiacale conventionnelle. Les résultats par signe sont descriptifs et ne constituent pas une preuve d'influence.
 - **Statistiques :** les corrélations de Spearman utilisent des p-values par permutation déterministe, puis une correction de Holm pour les tests multiples. En dessous de 30 tirages, le rapport n'effectue pas de batterie de corrélations. Un résultat significatif reste une piste à répliquer, jamais un signal prédictif acquis.
 
