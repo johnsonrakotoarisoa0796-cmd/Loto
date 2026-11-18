@@ -22,13 +22,14 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from analysis_engine import analyze_draws
 from scientific_engine import audit_draws
+from contextual_study import build_contextual_study
 from app.database import Base, Draw, PredictionRun, SessionLocal, engine
 
 BASE_DIR = Path(__file__).resolve().parent
 APP_PASSWORD = os.getenv("APP_PASSWORD", "")
 SECRET_KEY = os.getenv("SECRET_KEY", "development-secret-change-before-deploy")
 
-app = FastAPI(title="Loto 5/35 Analytics", version="1.2.0")
+app = FastAPI(title="Loto 5/35 Analytics", version="1.3.0")
 app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
@@ -480,3 +481,12 @@ def science_page(request: Request):
 def get_scientific_audit(db: Session = Depends(get_db)):
     return audit_draws(load_draws(db))
 # --- END LOTO LAB: scientific audit engine ---
+
+
+@app.get("/api/contextual-study", dependencies=[Depends(require_auth)])
+def get_contextual_study(db: Session = Depends(get_db)):
+    """Return astronomical, weather and seismic context without altering predictions."""
+    try:
+        return build_contextual_study(load_draws(db))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
