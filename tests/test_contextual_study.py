@@ -79,6 +79,11 @@ def test_configured_study_merges_daily_weather_and_seismic_records(monkeypatch):
         "precipitation_sum": 2.5,
         "wind_speed_10m_max": 15.0,
         "cloud_cover_mean": 35.0,
+        "temperature_2m_at_draw_hour": 23.5,
+        "relative_humidity_2m_at_draw_hour": 72.0,
+        "pressure_msl_at_draw_hour": 1011.0,
+        "precipitation_at_draw_hour": 0.2,
+        "wind_speed_10m_at_draw_hour": 13.0,
     }
     fake_seismic = {
         "earthquake_count": 1,
@@ -101,6 +106,8 @@ def test_configured_study_merges_daily_weather_and_seismic_records(monkeypatch):
     assert result["meta"]["location_name"] == "Antananarivo"
     by_date = {row["date"]: row for row in result["rows"]}
     assert by_date[first_day]["temperature_2m_mean"] == 24.0
+    assert by_date[first_day]["temperature_2m_at_draw_hour"] == 23.5
+    assert by_date[first_day]["precipitation_at_draw_hour"] == 0.2
     assert by_date[first_day]["earthquake_count"] == 1
     assert by_date[first_day]["max_magnitude"] == 3.2
     assert by_date[first_day]["nearest_depth_km"] == 12.0
@@ -186,4 +193,38 @@ def test_custom_coordinates_override_provisional_default(monkeypatch):
     assert location["latitude"] == pytest.approx(-18.8792)
     assert location["longitude"] == pytest.approx(47.5079)
     assert location["name"] == "Antananarivo - lieu confirmé"
+
+def test_fetch_weather_extracts_hourly_values_at_local_draw_hour(monkeypatch):
+    day = date(2026, 11, 18)
+    payload = {
+        "daily": {
+            "time": [day.isoformat()],
+            "temperature_2m_mean": [24.0],
+            "temperature_2m_max": [29.0],
+            "temperature_2m_min": [19.0],
+            "relative_humidity_2m_mean": [70.0],
+            "pressure_msl_mean": [1012.0],
+            "precipitation_sum": [2.5],
+            "wind_speed_10m_max": [15.0],
+            "cloud_cover_mean": [35.0],
+        },
+        "hourly": {
+            "time": [f"{day.isoformat()}T15:00", f"{day.isoformat()}T16:00", f"{day.isoformat()}T17:00"],
+            "temperature_2m": [22.0, 23.5, 24.0],
+            "relative_humidity_2m": [75.0, 72.0, 68.0],
+            "pressure_msl": [1010.0, 1011.0, 1012.0],
+            "precipitation": [0.0, 0.2, 0.1],
+            "wind_speed_10m": [11.0, 13.0, 14.0],
+            "cloud_cover": [40.0, 35.0, 30.0],
+        },
+    }
+    monkeypatch.setattr(study, "_fetch_json", lambda url: payload)
+    result = study._fetch_weather(
+        day, day,
+        {"latitude": -18.91, "longitude": 47.52, "timezone": "Indian/Antananarivo", "draw_time": "16:35"},
+    )
+    assert result[day.isoformat()]["temperature_2m_mean"] == 24.0
+    assert result[day.isoformat()]["temperature_2m_at_draw_hour"] == 23.5
+    assert result[day.isoformat()]["relative_humidity_2m_at_draw_hour"] == 72.0
+    assert result[day.isoformat()]["weather_reference_hour_local"] == "16:00"
 
