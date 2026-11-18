@@ -23,6 +23,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from analysis_engine import analyze_draws
 from scientific_engine import audit_draws
 from contextual_study import build_contextual_study
+from contextual_predictor import build_contextual_prediction
 from app.database import Base, Draw, PredictionRun, SessionLocal, engine
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -310,10 +311,61 @@ def get_analysis(db: Session = Depends(get_db)):
     return analyze_draws(load_draws(db))
 
 
+def _apply_contextual_model(
+    analysis: dict,
+    contextual: dict,
+) -> dict:
+    prediction = analysis["prediction"]
+    prediction["contextual_model"] = contextual
+    prediction["active_model_id"] = "hybrid"
+    if not contextual.get("ready"):
+        return analysis
+
+    model = {
+        "id": "contextual",
+        "label": "Historique + météo + Lune + sismicité",
+        "description": (
+            "Classement expérimental : historique/récence combinés aux contextes "
+            "météo, lunaires et sismiques les plus proches."
+        ),
+        "numbers": contextual["numbers"],
+        "score_index": contextual["score_index"],
+        "score_note": "Indice relatif et contextuel, pas une probabilité.",
+    }
+    prediction["models"] = [
+        item for item in prediction.get("models", []) if item.get("id") != "contextual"
+    ] + [model]
+    prediction["numbers"] = contextual["numbers"]
+    prediction["ranked"] = contextual["ranked"]
+    prediction["active_model_id"] = "contextual"
+    prediction["method"] = (
+        "Modèle contextuel expérimental : historique + récence + contexte "
+        "météorologique, lunaire et sismique."
+    )
+    prediction["alternatives"] = [
+        item["numbers"] for item in prediction["models"] if item["id"] != "contextual"
+    ]
+    analysis.setdefault("backtest", {})["contextual_comparison"] = contextual.get("backtest")
+    return analysis
+
+
+def _effective_prediction(draws: list[dict]) -> dict:
+    analysis = analyze_draws(draws)
+    try:
+        contextual = build_contextual_prediction(draws)
+    except Exception as exc:
+        contextual = {
+            "ready": False,
+            "status": "context_error",
+            "reason": "Le calcul contextuel est momentanément indisponible ; le classement historique est conservé.",
+            "detail": type(exc).__name__,
+        }
+    return _apply_contextual_model(analysis, contextual)["prediction"]
+
+
 @app.get("/api/predictions", dependencies=[Depends(require_auth)])
 def get_predictions(db: Session = Depends(get_db)):
-    analysis = analyze_draws(load_draws(db))
-    return analysis["prediction"]
+    return _effective_prediction(load_draws(db))
 
 
 @app.post("/api/predictions/record", dependencies=[Depends(require_auth), Depends(require_csrf)])
@@ -321,7 +373,7 @@ def record_prediction(db: Session = Depends(get_db)):
     draws = load_draws(db)
     if not draws:
         raise HTTPException(status_code=400, detail="Ajoute au moins un tirage avant d'enregistrer une prévision.")
-    prediction = analyze_draws(draws)["prediction"]
+    prediction = _effective_prediction(draws)
     latest_date = draws[-1]["date"]
     existing = db.scalar(
         select(PredictionRun).where(
@@ -336,7 +388,11 @@ def record_prediction(db: Session = Depends(get_db)):
         based_on_draw_count=len(draws),
         based_on_latest_date=latest_date,
         numbers_json=json.dumps(prediction["numbers"]),
-        model_name="Historique + récence",
+        model_name=(
+            "Historique + météo + Lune + sismicité"
+            if prediction.get("active_model_id") == "contextual"
+            else "Historique + récence"
+        ),
     )
     db.add(row)
     db.commit()
@@ -485,8 +541,17 @@ def get_scientific_audit(db: Session = Depends(get_db)):
 
 @app.get("/api/contextual-study", dependencies=[Depends(require_auth)])
 def get_contextual_study(db: Session = Depends(get_db)):
-    """Return astronomical, weather and seismic context without altering predictions."""
+    """Return the raw astronomical, weather and seismic study."""
     try:
         return build_contextual_study(load_draws(db))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/contextual-prediction", dependencies=[Depends(require_auth)])
+def get_contextual_prediction(db: Session = Depends(get_db)):
+    """Return an experimental next-draw ranking using pre-draw external context."""
+    try:
+        return build_contextual_prediction(load_draws(db))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
