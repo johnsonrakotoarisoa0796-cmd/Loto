@@ -292,21 +292,21 @@
       : "Événements autour du lieu du tirage";
 
     const timeNotice = meta.timezone_assumed_utc
-      ? " L'heure " + (meta.draw_time || "16:35") + " est provisoirement interprétée en UTC : configure DRAW_TIMEZONE avec le fuseau réel du lieu pour calculer la Lune à l'instant local exact."
+      ? " L'heure " + (meta.draw_time || "16:35") + " est provisoirement interprétée en UTC : vérifie DRAW_TIMEZONE dans Render."
       : " Référence horaire : " + (meta.draw_time || "16:35") + " (" + (meta.timezone || "fuseau configuré") + ").";
-    if (!meta.location_configured) {
-      configWarning.hidden = false;
-      configWarning.textContent = "Pour obtenir les données météorologiques et sismiques locales, ajoute dans Render > Environment les variables DRAW_LOCATION_LAT et DRAW_LOCATION_LON du lieu réel du tirage. Tu peux aussi préciser DRAW_LOCATION_NAME, DRAW_TIME (défaut 16:35), DRAW_TIMEZONE, SEISMIC_RADIUS_KM (défaut 200 km) et SEISMIC_MIN_MAGNITUDE (défaut 2,5). Les cycles lunaires et les signes symboliques sont déjà calculés." + timeNotice;
-    } else if (meta.weather_error || meta.seismic_error) {
-      configWarning.hidden = false;
-      configWarning.textContent = [meta.weather_error, meta.seismic_error].filter(Boolean).join(" ") + timeNotice;
-    } else if (meta.timezone_assumed_utc) {
-      configWarning.hidden = false;
-      configWarning.textContent = timeNotice.trim();
-    } else {
-      configWarning.hidden = true;
-      configWarning.textContent = "";
+    const notices = [];
+    if (meta.location_is_estimate) {
+      notices.push("Lieu provisoire : centre du quartier Antaninarenina à Antananarivo, utilisé comme approximation parce que le site exact n'a pas été confirmé. Vérifie que le tirage correspond bien au Loto 5/35 Bet261 ; remplace DRAW_LOCATION_LAT, DRAW_LOCATION_LON et DRAW_LOCATION_NAME dans Render si nécessaire.");
     }
+    if (meta.weather_error || meta.seismic_error) {
+      notices.push([meta.weather_error, meta.seismic_error].filter(Boolean).join(" "));
+    }
+    if (meta.timezone_assumed_utc) notices.push(timeNotice.trim());
+    if (!meta.location_configured) {
+      notices.push("Les coordonnées du lieu du tirage ne sont pas configurées. Ajoute DRAW_LOCATION_LAT et DRAW_LOCATION_LON dans Render > Environment.");
+    }
+    configWarning.hidden = notices.length === 0;
+    configWarning.textContent = notices.join(" ") + (notices.length ? timeNotice : "");
 
     const correlations = data.correlations || {};
     $("#context-test-count").textContent = (correlations.tests_count || 0) + " TEST" + ((correlations.tests_count || 0) > 1 ? "S" : "");
