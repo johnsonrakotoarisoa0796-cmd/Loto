@@ -234,3 +234,22 @@ def test_render_style_default_coordinates_remain_marked_as_estimate(monkeypatch)
     monkeypatch.setenv("DRAW_LOCATION_NAME", study.DEFAULT_DRAW_LOCATION["name"])
     assert study._location_config()["location_is_estimate"] is True
 
+
+def test_location_estimate_override_is_respected(monkeypatch):
+    monkeypatch.setenv("DRAW_LOCATION_LAT", "-18.8792")
+    monkeypatch.setenv("DRAW_LOCATION_LON", "47.5079")
+    monkeypatch.setenv("DRAW_LOCATION_NAME", "Site officiel confirmé")
+    monkeypatch.setenv("DRAW_LOCATION_IS_ESTIMATE", "true")
+    assert study._location_config()["location_is_estimate"] is True
+
+    monkeypatch.setenv("DRAW_LOCATION_IS_ESTIMATE", "false")
+    assert study._location_config()["location_is_estimate"] is False
+
+
+def test_unconfigured_fallback_cannot_be_marked_as_confirmed(monkeypatch):
+    monkeypatch.delenv("DRAW_LOCATION_LAT", raising=False)
+    monkeypatch.delenv("DRAW_LOCATION_LON", raising=False)
+    monkeypatch.setenv("DRAW_LOCATION_IS_ESTIMATE", "false")
+    location = study._location_config()
+    assert location["configured"] is True
+    assert location["location_is_estimate"] is True
