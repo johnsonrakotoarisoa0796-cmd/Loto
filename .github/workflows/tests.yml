@@ -22,6 +22,6 @@ jobs:
       - name: Run test suite
         run: pytest -q
       - name: Compile Python modules
-        run: python -m compileall -q app analysis_engine.py scientific_engine.py contextual_study.py
+        run: python -m compileall -q app analysis_engine.py scientific_engine.py contextual_study.py contextual_predictor.py
       - name: Check frontend JavaScript syntax
         run: node --check app/static/app.js
