@@ -228,3 +228,9 @@ def test_fetch_weather_extracts_hourly_values_at_local_draw_hour(monkeypatch):
     assert result[day.isoformat()]["relative_humidity_2m_at_draw_hour"] == 72.0
     assert result[day.isoformat()]["weather_reference_hour_local"] == "16:00"
 
+def test_render_style_default_coordinates_remain_marked_as_estimate(monkeypatch):
+    monkeypatch.setenv("DRAW_LOCATION_LAT", str(study.DEFAULT_DRAW_LOCATION["latitude"]))
+    monkeypatch.setenv("DRAW_LOCATION_LON", str(study.DEFAULT_DRAW_LOCATION["longitude"]))
+    monkeypatch.setenv("DRAW_LOCATION_NAME", study.DEFAULT_DRAW_LOCATION["name"])
+    assert study._location_config()["location_is_estimate"] is True
+
