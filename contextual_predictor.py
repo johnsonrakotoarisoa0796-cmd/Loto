@@ -270,7 +270,7 @@ def _rank_contextual(
         "neighbors_used": len(selected),
         "effective_neighbors": round(effective_neighbors, 2),
         "blend_weight": round(blend_weight, 3),
-        "features_used": sorted(set.intersection(*(set(item["features"]) for item in selected)) & set(target_context)),
+        "features_used": sorted(set.intersection(*(set(item["features"]) for _, item in selected)) & set(target_context)),
         "mean_context_distance": round(sum(distance for distance, _ in selected) / len(selected), 3),
     }
     return ranked, diagnostics
