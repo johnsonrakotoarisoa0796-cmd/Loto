@@ -441,9 +441,12 @@ def _fetch_recent_seismic_snapshot(
 
 
 def _fetch_seismic(
-    start_date: date, end_date: date, location: dict[str, Any]
+    start_date: date,
+    end_date: date,
+    location: dict[str, Any],
+    cutoff_offset: timedelta = timedelta(0),
 ) -> dict[str, dict[str, Any]]:
-    """Build a no-look-ahead 24-hour seismic window ending at each draw cutoff."""
+    """Build a 24-hour seismic window ending at a consistent pre-draw forecast cutoff."""
     events_by_date: dict[str, list[dict[str, Any]]] = defaultdict(list)
     timezone_name = location.get("timezone", DEFAULT_DRAW_TIMEZONE)
     try:
@@ -494,7 +497,10 @@ def _fetch_seismic(
             for draw_day in (event_day, event_day + timedelta(days=1)):
                 if not start_date <= draw_day <= end_date:
                     continue
-                cutoff_local = datetime.combine(draw_day, draw_time, tzinfo=local_timezone)
+                cutoff_local = (
+                    datetime.combine(draw_day, draw_time, tzinfo=local_timezone)
+                    - cutoff_offset
+                )
                 if cutoff_local - timedelta(hours=24) <= event_time <= cutoff_local:
                     events_by_date[draw_day.isoformat()].append(event)
     return {
@@ -506,7 +512,10 @@ def _fetch_seismic(
 
 
 def _external_context(
-    start_date: date, end_date: date, location: dict[str, Any]
+    start_date: date,
+    end_date: date,
+    location: dict[str, Any],
+    seismic_cutoff_offset: timedelta = timedelta(0),
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     cache_payload = {
         "start": start_date.isoformat(),
@@ -515,6 +524,7 @@ def _external_context(
         "lon": location["longitude"],
         "timezone": location["timezone"],
         "draw_time": location["draw_time"],
+        "seismic_cutoff_offset_seconds": int(seismic_cutoff_offset.total_seconds()),
         "radius": location["seismic_radius_km"],
         "min_mag": location["seismic_min_magnitude"],
     }
@@ -538,7 +548,9 @@ def _external_context(
     except (OSError, ValueError, urllib.error.URLError, TimeoutError):
         statuses["weather_error"] = "Archives météorologiques momentanément indisponibles."
     try:
-        seismic = _fetch_seismic(start_date, end_date, location)
+        seismic = _fetch_seismic(
+            start_date, end_date, location, cutoff_offset=seismic_cutoff_offset
+        )
         statuses["seismic_available"] = True
     except (OSError, ValueError, urllib.error.URLError, TimeoutError):
         statuses["seismic_error"] = "Catalogue sismique momentanément indisponible."
@@ -718,6 +730,7 @@ def build_contextual_study(
     raw_draws: Iterable[dict[str, Any]],
     *,
     include_all_rows: bool = False,
+    seismic_cutoff_offset: timedelta = timedelta(0),
 ) -> dict[str, Any]:
     """Build an observational dataset; do not alter any prediction scores."""
     draws = []
@@ -765,7 +778,8 @@ def build_contextual_study(
     weather_rows: list[dict[str, Any]] = []
     if draws and location["configured"]:
         source_status, weather_rows = _external_context(
-            draws[0]["date"], draws[-1]["date"], location
+            draws[0]["date"], draws[-1]["date"], location,
+            seismic_cutoff_offset=seismic_cutoff_offset,
         )
         environment_by_date = {row["date"]: row for row in weather_rows}
         for row in rows:
@@ -825,6 +839,7 @@ def build_contextual_study(
             "timezone_assumed_utc": location.get("timezone", "auto") == "auto",
             "seismic_radius_km": location.get("seismic_radius_km"),
             "seismic_min_magnitude": location.get("seismic_min_magnitude"),
+            "seismic_cutoff_offset_hours": round(seismic_cutoff_offset.total_seconds() / 3600, 3),
             **source_status,
         },
         "methodology": {
