@@ -39,7 +39,7 @@ def test_default_location_is_explicitly_approximate_and_keeps_study_local(monkey
     monkeypatch.setattr(
         study,
         "_external_context",
-        lambda start, end, location: (
+        lambda start, end, location, seismic_cutoff_offset=timedelta(0): (
             {"weather_available": False, "seismic_available": False,
              "weather_error": None, "seismic_error": None},
             [],
@@ -95,7 +95,7 @@ def test_configured_study_merges_daily_weather_and_seismic_records(monkeypatch):
     monkeypatch.setattr(
         study,
         "_external_context",
-        lambda start, end, location: (
+        lambda start, end, location, seismic_cutoff_offset=timedelta(0): (
             {"weather_available": True, "seismic_available": True,
              "weather_error": None, "seismic_error": None},
             [{"date": first_day, "weather": fake_weather, "seismic": fake_seismic}],
@@ -145,7 +145,7 @@ def test_study_marks_small_sample_as_exploratory_or_insufficient(monkeypatch):
     monkeypatch.setattr(
         study,
         "_external_context",
-        lambda start, end, location: (
+        lambda start, end, location, seismic_cutoff_offset=timedelta(0): (
             {"weather_available": False, "seismic_available": False,
              "weather_error": None, "seismic_error": None},
             [],
