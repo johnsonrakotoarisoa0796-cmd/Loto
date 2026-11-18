@@ -191,6 +191,10 @@ def _location_config() -> dict[str, Any]:
             "draw_time": draw_time.isoformat(timespec="minutes"),
             "timezone": timezone_name,
         }
+    location_is_estimate = use_default_location or (
+        math.isclose(latitude, DEFAULT_DRAW_LOCATION["latitude"], abs_tol=1e-5)
+        and math.isclose(longitude, DEFAULT_DRAW_LOCATION["longitude"], abs_tol=1e-5)
+    )
     try:
         radius = float(os.getenv("SEISMIC_RADIUS_KM", "200"))
     except ValueError:
@@ -209,12 +213,12 @@ def _location_config() -> dict[str, Any]:
         "longitude": longitude,
         "name": (
             os.getenv("DRAW_LOCATION_NAME", "").strip()
-            or (DEFAULT_DRAW_LOCATION["name"] if use_default_location else "Lieu du tirage")
+            or (DEFAULT_DRAW_LOCATION["name"] if location_is_estimate else "Lieu du tirage")
         ),
-        "location_is_estimate": use_default_location,
+        "location_is_estimate": location_is_estimate,
         "location_note": (
             "Point provisoire au centre du quartier Antaninarenina, à confirmer avec l'opérateur du tirage."
-            if use_default_location else "Coordonnées personnalisées définies dans l'environnement de l'application."
+            if location_is_estimate else "Coordonnées personnalisées définies dans l'environnement de l'application."
         ),
         "timezone": timezone_name,
         "draw_time": draw_time.isoformat(timespec="minutes"),
@@ -489,13 +493,19 @@ def _correlations(rows: list[dict[str, Any]]) -> dict[str, Any]:
     predictors = (
         ("moon_illumination", "Éclairement lunaire"),
         ("moon_age_days", "Âge de la Lune"),
-        ("temperature_2m_mean", "Température moyenne"),
-        ("temperature_2m_max", "Température maximale"),
-        ("relative_humidity_2m_mean", "Humidité moyenne"),
-        ("pressure_msl_mean", "Pression au niveau de la mer"),
-        ("precipitation_sum", "Précipitations"),
-        ("wind_speed_10m_max", "Vent maximal"),
-        ("cloud_cover_mean", "Nébulosité moyenne"),
+        ("temperature_2m_mean", "Température moyenne quotidienne"),
+        ("temperature_2m_max", "Température maximale quotidienne"),
+        ("relative_humidity_2m_mean", "Humidité moyenne quotidienne"),
+        ("pressure_msl_mean", "Pression moyenne quotidienne"),
+        ("precipitation_sum", "Précipitations quotidiennes"),
+        ("wind_speed_10m_max", "Vent maximal quotidien"),
+        ("cloud_cover_mean", "Nébulosité moyenne quotidienne"),
+        ("temperature_2m_at_draw_hour", "Température vers 16:00 locale"),
+        ("relative_humidity_2m_at_draw_hour", "Humidité vers 16:00 locale"),
+        ("pressure_msl_at_draw_hour", "Pression vers 16:00 locale"),
+        ("precipitation_at_draw_hour", "Précipitations de l'heure précédente"),
+        ("wind_speed_10m_at_draw_hour", "Vent vers 16:00 locale"),
+        ("cloud_cover_at_draw_hour", "Nébulosité vers 16:00 locale"),
         ("earthquake_count", "Nombre de séismes catalogués"),
         ("max_magnitude", "Magnitude maximale"),
         ("nearest_distance_km", "Distance du séisme le plus proche"),
