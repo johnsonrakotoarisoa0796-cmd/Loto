@@ -191,10 +191,19 @@ def _location_config() -> dict[str, Any]:
             "draw_time": draw_time.isoformat(timespec="minutes"),
             "timezone": timezone_name,
         }
-    location_is_estimate = use_default_location or (
+    inferred_estimate = use_default_location or (
         math.isclose(latitude, DEFAULT_DRAW_LOCATION["latitude"], abs_tol=1e-5)
         and math.isclose(longitude, DEFAULT_DRAW_LOCATION["longitude"], abs_tol=1e-5)
     )
+    estimate_override = os.getenv("DRAW_LOCATION_IS_ESTIMATE", "").strip().lower()
+    if estimate_override in {"true", "1", "yes", "oui"}:
+        location_is_estimate = True
+    elif estimate_override in {"false", "0", "no", "non"} and not use_default_location:
+        location_is_estimate = False
+    else:
+        # Missing coordinates always use an estimated default; setting false
+        # cannot turn an unverified fallback into a confirmed physical venue.
+        location_is_estimate = inferred_estimate
     try:
         radius = float(os.getenv("SEISMIC_RADIUS_KM", "200"))
     except ValueError:
