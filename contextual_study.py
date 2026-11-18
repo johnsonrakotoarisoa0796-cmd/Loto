@@ -28,6 +28,15 @@ MIN_EXPLORATORY_SAMPLE = 30
 MIN_MONITORING_SAMPLE = 100
 CACHE_TTL_SECONDS = 6 * 60 * 60
 
+# Réglages provisoires fondés sur la documentation publique du Loto 5/35 Bet261.
+# Le point est le centre approximatif du quartier Antaninarenina, pas une adresse vérifiée.
+DEFAULT_DRAW_TIMEZONE = "Indian/Antananarivo"
+DEFAULT_DRAW_LOCATION = {
+    "latitude": -18.9103,
+    "longitude": 47.52502,
+    "name": "Antaninarenina, Antananarivo (approximatif)",
+}
+
 ZODIAC_SIGNS = (
     ("Capricorne", (1, 1), (1, 19)),
     ("Verseau", (1, 20), (2, 18)),
@@ -86,12 +95,14 @@ def _draw_time_config() -> tuple[datetime_time, str]:
             raise ValueError("DRAW_TIME must be local wall-clock time without a UTC offset.")
     except ValueError:
         draw_time = datetime_time(16, 35)
-    timezone_name = os.getenv("DRAW_TIMEZONE", "auto").strip() or "auto"
-    if timezone_name != "auto":
-        try:
-            ZoneInfo(timezone_name)
-        except ZoneInfoNotFoundError:
-            timezone_name = "auto"
+    timezone_name = os.getenv("DRAW_TIMEZONE", DEFAULT_DRAW_TIMEZONE).strip() or DEFAULT_DRAW_TIMEZONE
+    # "auto" used to interpret 16:35 as UTC; use Madagascar local time by default.
+    if timezone_name.lower() == "auto":
+        timezone_name = DEFAULT_DRAW_TIMEZONE
+    try:
+        ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        timezone_name = DEFAULT_DRAW_TIMEZONE
     return draw_time.replace(second=0, microsecond=0), timezone_name
 
 
@@ -143,10 +154,14 @@ def _location_config() -> dict[str, Any]:
     draw_time, timezone_name = _draw_time_config()
     raw_lat = os.getenv("DRAW_LOCATION_LAT", "").strip()
     raw_lon = os.getenv("DRAW_LOCATION_LON", "").strip()
-    if not raw_lat or not raw_lon:
+    use_default_location = not raw_lat and not raw_lon
+    if use_default_location:
+        raw_lat = str(DEFAULT_DRAW_LOCATION["latitude"])
+        raw_lon = str(DEFAULT_DRAW_LOCATION["longitude"])
+    elif not raw_lat or not raw_lon:
         return {
             "configured": False,
-            "reason": "Coordonnées du lieu du tirage non configurées.",
+            "reason": "Les deux coordonnées DRAW_LOCATION_LAT et DRAW_LOCATION_LON doivent être renseignées ensemble.",
             "draw_time": draw_time.isoformat(timespec="minutes"),
             "timezone": timezone_name,
         }
@@ -183,7 +198,15 @@ def _location_config() -> dict[str, Any]:
         "configured": True,
         "latitude": latitude,
         "longitude": longitude,
-        "name": os.getenv("DRAW_LOCATION_NAME", "Lieu du tirage").strip() or "Lieu du tirage",
+        "name": (
+            os.getenv("DRAW_LOCATION_NAME", "").strip()
+            or (DEFAULT_DRAW_LOCATION["name"] if use_default_location else "Lieu du tirage")
+        ),
+        "location_is_estimate": use_default_location,
+        "location_note": (
+            "Point provisoire au centre du quartier Antaninarenina, à confirmer avec l'opérateur du tirage."
+            if use_default_location else "Coordonnées personnalisées définies dans l'environnement de l'application."
+        ),
         "timezone": timezone_name,
         "draw_time": draw_time.isoformat(timespec="minutes"),
         "seismic_radius_km": radius,
@@ -613,6 +636,8 @@ def build_contextual_study(raw_draws: Iterable[dict[str, Any]]) -> dict[str, Any
             "sample_note": sample_note,
             "location_configured": location["configured"],
             "location_name": location.get("name"),
+            "location_is_estimate": location.get("location_is_estimate", False),
+            "location_note": location.get("location_note"),
             "latitude": location.get("latitude"),
             "longitude": location.get("longitude"),
             "timezone": location.get("timezone"),
@@ -624,7 +649,7 @@ def build_contextual_study(raw_draws: Iterable[dict[str, Any]]) -> dict[str, Any
         },
         "methodology": {
             "astrology": "Signe solaire tropical calculé à partir de la date ; information symbolique, non validée comme facteur prédictif.",
-            "astronomy": "Phase et éclairement lunaires approximatifs calculés au moment de référence local du tirage, avec conversion en UTC via DRAW_TIMEZONE ; si le fuseau n'est pas configuré, l'heure est interprétée comme UTC et cette hypothèse est signalée.",
+            "astronomy": "Phase et éclairement lunaires approximatifs calculés à 16:35 heure locale de Madagascar par défaut, avec conversion en UTC via Indian/Antananarivo ; un fuseau différent peut être fourni par DRAW_TIMEZONE.",
             "weather": "Valeurs quotidiennes historiques de réanalyse Open-Meteo ; elles ne sont pas nécessairement des mesures locales au point exact.",
             "seismic": "Catalogue d'événements sismiques USGS dans le rayon configuré ; les horodatages sont ramenés au fuseau DRAW_TIMEZONE si celui-ci est configuré. Ce ne sont pas des mesures de forme d'onde ou d'accélération du sol à l'endroit du tirage.",
             "prediction_policy": "Aucune variable externe n'entre dans les scores ou les combinaisons de prédiction.",
