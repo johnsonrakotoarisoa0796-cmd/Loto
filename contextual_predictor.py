@@ -276,9 +276,13 @@ def _rank_contextual(
     return ranked, diagnostics
 
 
-def _upcoming_draw_date(latest_date: date, location: dict[str, Any]) -> date:
+def _upcoming_draw_date(
+    latest_date: date,
+    location: dict[str, Any],
+    local_now: datetime | None = None,
+) -> date:
     timezone_name = location.get("timezone", DEFAULT_DRAW_TIMEZONE)
-    local_now = datetime.now(ZoneInfo(timezone_name))
+    local_now = local_now or datetime.now(ZoneInfo(timezone_name))
     draw_time = datetime_time.fromisoformat(location.get("draw_time", "16:35"))
     candidate = local_now.date()
     if local_now.time().replace(tzinfo=None) >= draw_time:
@@ -349,8 +353,9 @@ def _context_backtest(
             for value in range(PICK_COUNT + 1)
         ],
         "methodology": (
-            "Validation chronologique : le contexte de chaque date cible provient des données "
-            "horaires à 16:00 et du catalogue sismique des 24 heures précédant le cutoff 16:35. "
+            "Validation chronologique : le contexte de chaque date cible provient des prévisions "
+            "horaires à 16:00 et d'une fenêtre sismique de 24 heures se terminant au même délai "
+            "avant le cutoff 16:35 que le pronostic courant. "
             "Les paramètres du modèle sont fixes ; l'ajustement contextuel est plafonné à 25 %."
         ),
         "warning": (
@@ -360,7 +365,11 @@ def _context_backtest(
     }
 
 
-def _cache_key(draws: list[dict[str, Any]]) -> str:
+def _cache_key(
+    draws: list[dict[str, Any]],
+    target_date: date,
+    seismic_lead_time: timedelta,
+) -> str:
     serialized = [
         (item["date"].isoformat(), list(item["numbers"]))
         for item in draws
@@ -373,7 +382,12 @@ def _cache_key(draws: list[dict[str, Any]]) -> str:
             "SEISMIC_RADIUS_KM", "SEISMIC_MIN_MAGNITUDE",
         )
     }
-    raw = json.dumps({"draws": serialized, "location": location}, sort_keys=True)
+    raw = json.dumps({
+        "draws": serialized,
+        "location": location,
+        "target_date": target_date.isoformat(),
+        "seismic_lead_time_bucket_15m": int(seismic_lead_time.total_seconds() // 900),
+    }, sort_keys=True)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -405,12 +419,6 @@ def build_contextual_prediction(
     if not draws:
         return {"ready": False, "status": "no_history", "reason": "Aucun tirage enregistré."}
 
-    key = _cache_key(draws)
-    now_tick = time.monotonic()
-    cached = _PREDICTION_CACHE.get(key)
-    if not force_refresh and cached and cached[0] > now_tick:
-        return cached[1]
-
     location = _location_config()
     if not location.get("configured"):
         return {
@@ -420,11 +428,25 @@ def build_contextual_prediction(
             "draw_count": len(draws),
         }
 
-    target_date = _upcoming_draw_date(draws[-1]["date"], location)
+    timezone_name = location.get("timezone", DEFAULT_DRAW_TIMEZONE)
+    local_now = datetime.now(ZoneInfo(timezone_name))
+    target_date = _upcoming_draw_date(draws[-1]["date"], location, local_now)
+    draw_time = datetime_time.fromisoformat(location.get("draw_time", "16:35"))
+    target_cutoff_local = datetime.combine(
+        target_date, draw_time, tzinfo=ZoneInfo(timezone_name)
+    )
+    seismic_lead_time = max(target_cutoff_local - local_now, timedelta(0))
+    key = _cache_key(draws, target_date, seismic_lead_time)
+    now_tick = time.monotonic()
+    cached = _PREDICTION_CACHE.get(key)
+    if not force_refresh and cached and cached[0] > now_tick:
+        return cached[1]
+
     try:
         historical_study = build_contextual_study(
             [{"date": item["date"], "numbers": item["numbers"]} for item in draws],
             include_all_rows=True,
+            seismic_cutoff_offset=seismic_lead_time,
         )
         history_rows = sorted(historical_study.get("rows", []), key=lambda row: row["date"])
     except Exception as exc:
@@ -454,7 +476,10 @@ def build_contextual_prediction(
         **forecast_weather,
     }
     try:
-        seismic_snapshot = _fetch_recent_seismic_snapshot(location)
+        seismic_snapshot = _fetch_recent_seismic_snapshot(
+            location,
+            as_of=local_now.astimezone(timezone.utc),
+        )
         future_row.update({
             "earthquake_count": seismic_snapshot.get("earthquake_count"),
             "max_magnitude": seismic_snapshot.get("max_magnitude"),
@@ -527,7 +552,8 @@ def build_contextual_prediction(
             "et de la fréquence observée parmi les tirages passés aux contextes les plus proches. "
             "La composante contextuelle est fortement rétrécie vers le score historique et son "
             "poids est limité à 25 %. Les données astronomiques et météo sont évaluées à l'heure "
-            "de référence ; les séismes sont limités aux événements connus avant le snapshot. "
+            "de référence ; la fenêtre sismique historique est alignée sur le délai du snapshot courant, "
+            "et aucun événement postérieur à ce snapshot n'est utilisé. "
             "Ce modèle est expérimental et ne peut pas rendre prévisible un tirage indépendant."
         ),
         "warning": (
