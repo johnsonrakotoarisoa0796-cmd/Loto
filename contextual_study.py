@@ -241,10 +241,12 @@ def _fetch_seismic(
     for day, events in events_by_date.items():
         magnitudes = [float(event["magnitude"]) for event in events if event["magnitude"] is not None]
         distances = [float(event["distance_km"]) for event in events]
+        nearest_event = min(events, key=lambda event: event["distance_km"]) if events else None
         result[day] = {
             "earthquake_count": len(events),
             "max_magnitude": max(magnitudes) if magnitudes else None,
             "nearest_distance_km": min(distances) if distances else None,
+            "nearest_depth_km": nearest_event["depth_km"] if nearest_event else None,
             "events": sorted(events, key=lambda event: event["distance_km"])[:5],
         }
     return result
@@ -507,6 +509,7 @@ def build_contextual_study(raw_draws: Iterable[dict[str, Any]]) -> dict[str, Any
                 "earthquake_count": seismic.get("earthquake_count", 0),
                 "max_magnitude": seismic.get("max_magnitude"),
                 "nearest_distance_km": seismic.get("nearest_distance_km"),
+                "nearest_depth_km": seismic.get("nearest_depth_km"),
                 "seismic_events": seismic.get("events", []),
             })
     else:
@@ -515,6 +518,7 @@ def build_contextual_study(raw_draws: Iterable[dict[str, Any]]) -> dict[str, Any
                 "earthquake_count": None,
                 "max_magnitude": None,
                 "nearest_distance_km": None,
+                "nearest_depth_km": None,
                 "seismic_events": [],
             })
 
