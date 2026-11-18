@@ -530,6 +530,7 @@ def build_contextual_prediction(
         "ready": True,
         "status": "experimental_active",
         "next_draw_date": target_date.isoformat(),
+        "seismic_lead_time_hours": round(seismic_lead_time.total_seconds() / 3600, 2),
         "reference_time_local": location.get("draw_time", "16:35"),
         "timezone": location.get("timezone", DEFAULT_DRAW_TIMEZONE),
         "location_name": location.get("name"),
