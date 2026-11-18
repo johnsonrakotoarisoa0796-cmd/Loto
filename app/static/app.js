@@ -336,11 +336,11 @@
       return '<tr><td>' + formatDate(row.date) + '<small>' + escapeHtml(row.reference_time_local || meta.draw_time || "16:35") + '</small></td>' +
         '<td><strong>' + escapeHtml(row.zodiac_sign) + '</strong><small>' + escapeHtml(row.moon_phase) +
         ' · ' + Math.round((row.moon_illumination || 0) * 100) + '%</small></td>' +
-        '<td>' + weather(row.temperature_2m_mean, "°") + '</td>' +
-        '<td>' + weather(row.relative_humidity_2m_mean, " %") + '</td>' +
-        '<td>' + weather(row.precipitation_sum, " mm") + '</td>' +
-        '<td>' + weather(row.pressure_msl_mean, " hPa") + '</td>' +
-        '<td>' + weather(row.wind_speed_10m_max, " km/h") + '</td>' +
+        '<td>' + weather(row.temperature_2m_at_draw_hour ?? row.temperature_2m_mean, "°") + '</td>' +
+        '<td>' + weather(row.relative_humidity_2m_at_draw_hour ?? row.relative_humidity_2m_mean, " %") + '</td>' +
+        '<td>' + weather(row.precipitation_at_draw_hour ?? row.precipitation_sum, " mm") + '</td>' +
+        '<td>' + weather(row.pressure_msl_at_draw_hour ?? row.pressure_msl_mean, " hPa") + '</td>' +
+        '<td>' + weather(row.wind_speed_10m_at_draw_hour ?? row.wind_speed_10m_max, " km/h") + '</td>' +
         '<td>' + seismicCount + '</td>' +
         '<td>' + weather(row.nearest_distance_km, " km") + '</td>' +
         '<td>' + weather(row.nearest_depth_km, " km") + '</td>' +
@@ -351,6 +351,7 @@
     $("#context-methodology-note").textContent = [
       data.methodology && data.methodology.astrology,
       data.methodology && data.methodology.astronomy,
+      data.methodology && data.methodology.weather,
       data.methodology && data.methodology.seismic,
       data.methodology && data.methodology.prediction_policy
     ].filter(Boolean).join(" ");
