@@ -602,9 +602,12 @@
     if ($("#contextual-prediction-refresh")) $("#contextual-prediction-refresh").addEventListener("click", async (event) => {
       const button = event.currentTarget;
       button.disabled = true;
-      const refreshed = await loadContextualPrediction(true);
-      if (refreshed) toast("Modèle contextuel actualisé.");
-      finally { button.disabled = false; }
+      try {
+        const refreshed = await loadContextualPrediction(true);
+        if (refreshed) toast("Modèle contextuel actualisé.");
+      } finally {
+        button.disabled = false;
+      }
     });
     if ($("#logout-button")) {
       $("#logout-button").addEventListener("click", async () => {
