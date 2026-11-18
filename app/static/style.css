@@ -149,3 +149,47 @@
   .movement-row strong{font-size:8px}
   .backtest-summary{gap:7px;flex-direction:column}
 }
+
+
+
+/* Environmental and astronomy research dashboard */
+.context-callout{margin:0 0 16px}
+.context-config-warning{margin:0 0 16px;padding:13px 15px;border:1px solid #ecd7b6;background:#fff8ec;color:#85623b;border-radius:11px;font-size:10px;line-height:1.65}
+:root[data-theme="dark"] .context-config-warning{background:#2a2116;border-color:#57432b;color:#e4c79c}
+.context-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin-bottom:16px}
+.context-status-value{font-size:20px!important;letter-spacing:-.6px}
+.context-place-value{font-size:17px!important;line-height:1.2;overflow-wrap:anywhere}
+.context-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.context-wide{grid-column:1/-1}
+.context-table{min-width:790px;width:100%;border-collapse:collapse}
+.context-table th,.context-table td,.context-small-table th,.context-small-table td{padding:10px 9px;border-bottom:1px solid var(--line);text-align:left;font-size:9px;vertical-align:middle}
+.context-table th,.context-small-table th{color:var(--muted);font-size:8px;letter-spacing:.7px;white-space:nowrap}
+.context-table td strong{color:var(--ink);font-size:9px}
+.context-result-label{display:inline-flex;border-radius:7px;padding:4px 6px;font-size:8px;white-space:nowrap}
+.context-replicate{background:#fff2dc;color:#9a6825}
+.context-neutral{background:var(--bg);color:var(--muted)}
+:root[data-theme="dark"] .context-replicate{background:#3a2a17;color:#edc37f}
+.context-small-table{width:100%;border-collapse:collapse;min-width:300px}
+.context-small-table td{font:9px 'DM Mono',monospace}
+.context-history-panel{margin-top:16px}
+.context-history-table{width:100%;border-collapse:collapse;min-width:850px}
+.context-history-table th,.context-history-table td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:8px;white-space:nowrap}
+.context-history-table th{font-size:7px;color:var(--muted);letter-spacing:.6px}
+.context-history-table td strong,.context-history-table td small{display:block}
+.context-history-table td strong{font-size:9px;color:var(--ink)}
+.context-history-table td small{font-size:8px;color:var(--muted);margin-top:3px}
+.context-sources{margin:12px 0 4px;color:var(--muted);font-size:9px;line-height:1.6}
+.context-sources a{color:var(--blue);text-decoration:none}
+.context-sources a:hover{text-decoration:underline}
+:root[data-theme="dark"] .context-neutral{background:#1a2638}
+@media(max-width:1150px){.context-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:800px){.context-grid{grid-template-columns:1fr}.context-wide{grid-column:auto}}
+@media(max-width:560px){
+  .context-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .context-status-value{font-size:16px!important}
+  .context-place-value{font-size:14px!important}
+  .context-config-warning{font-size:9px}
+  .context-sources{font-size:8px}
+  .side-nav .nav-item{width:16.6667%}
+  .side-nav .nav-item{font-size:7px;padding-left:1px;padding-right:1px}
+}
