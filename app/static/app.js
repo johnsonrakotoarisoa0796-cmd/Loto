@@ -182,6 +182,9 @@
           (contextual.historical_context_draws || 0) + " contextes historiques utilisables. " +
           "Variables : " + (features || "météo et astronomie") +
           (forecastTime ? ". Prévision météo : " + forecastTime + "." : ".") +
+          (contextual.seismic_snapshot && contextual.seismic_snapshot.snapshot_time_utc
+            ? " Snapshot sismique du " + new Date(contextual.seismic_snapshot.snapshot_time_utc).toLocaleString("fr-FR") + "." : "") +
+          " Actualise le modèle avant le tirage pour intégrer les prévisions et observations les plus récentes." +
           (contextual.location_is_estimate ? " Lieu géographique approximatif." : "");
       } else {
         contextNote.textContent = "Le modèle météo/cosmos n'est pas encore activé : " +
@@ -585,6 +588,13 @@
     $("#csv-file").addEventListener("change", (event) => importFile(event.target.files[0]));
     $("#save-prediction").addEventListener("click", recordPrediction);
     if ($("#context-refresh")) $("#context-refresh").addEventListener("click", () => loadContextualStudy(true));
+    if ($("#contextual-prediction-refresh")) $("#contextual-prediction-refresh").addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try { await loadContextualPrediction(true); toast("Modèle contextuel actualisé."); }
+      catch (error) { toast("Actualisation impossible : " + error.message, true); }
+      finally { button.disabled = false; }
+    });
     if ($("#logout-button")) {
       $("#logout-button").addEventListener("click", async () => {
         try { await api("/logout", { method: "POST" }); window.location.href = "/login"; }
