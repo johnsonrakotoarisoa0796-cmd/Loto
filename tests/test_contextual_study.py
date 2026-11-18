@@ -66,6 +66,7 @@ def test_configured_study_merges_daily_weather_and_seismic_records(monkeypatch):
         "earthquake_count": 1,
         "max_magnitude": 3.2,
         "nearest_distance_km": 84.0,
+        "nearest_depth_km": 12.0,
         "events": [],
     }
     monkeypatch.setattr(
@@ -84,6 +85,7 @@ def test_configured_study_merges_daily_weather_and_seismic_records(monkeypatch):
     assert by_date[first_day]["temperature_2m_mean"] == 24.0
     assert by_date[first_day]["earthquake_count"] == 1
     assert by_date[first_day]["max_magnitude"] == 3.2
+    assert by_date[first_day]["nearest_depth_km"] == 12.0
     assert by_date[rows[1]["date"].isoformat()]["earthquake_count"] == 0
 
 
