@@ -453,6 +453,7 @@
           prediction.ranked = result.ranked;
           prediction.method = "Historique + météo + Lune + sismicité (expérimental)";
           prediction.alternatives = prediction.models.filter((item) => item.id !== "contextual").map((item) => item.numbers);
+          prediction.diverse_scenarios = result.diverse_scenarios || prediction.diverse_scenarios || [];
         } else {
           prediction.models = baseModels;
           prediction.numbers = baseModels.find((item) => item.id === "hybrid")?.numbers || prediction.numbers;
