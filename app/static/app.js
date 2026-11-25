@@ -226,14 +226,24 @@
     }).join("");
 
     const alternatives = models.filter((model) => model.id !== (primary && primary.id));
-    $("#alternative-combos").innerHTML = alternatives.length ? alternatives.map((model) =>
+    const methodCards = alternatives.map((model) =>
       '<section class="method-card">' +
         '<div class="method-card-head"><div><strong>' + escapeHtml(model.label) + '</strong><p>' + escapeHtml(model.description) + '</p></div>' +
         '<span class="method-index">' + scoreIndex(model.score_index) + '</span></div>' +
         '<div class="method-combo">' + model.numbers.map((n) => ball(n, false, true)).join("") + '</div>' +
         '<small>Indice moyen des 5 numéros · base 100</small>' +
       '</section>'
-    ).join("") : '<div class="empty-state">Les méthodes alternatives seront affichées après le chargement des données.</div>';
+    ).join("");
+    const diverseScenarios = prediction.diverse_scenarios || [];
+    const diverseCards = diverseScenarios.map((scenario) =>
+      '<section class="method-card diverse-scenario-card">' +
+        '<div class="method-card-head"><div><strong>' + escapeHtml(scenario.label) + '</strong><p>' + escapeHtml(scenario.description) + '</p></div>' +
+        '<span class="method-index">Diversité</span></div>' +
+        '<div class="method-combo">' + scenario.numbers.map((n) => ball(n, false, true)).join("") + '</div>' +
+        '<small>Communs avec la principale : ' + scenario.overlap_with_primary + '/5 · Rang moyen dans les 22 candidats : ' + scenario.mean_rank_in_pool + '</small>' +
+      '</section>'
+    ).join("");
+    $("#alternative-combos").innerHTML = methodCards + diverseCards || '<div class="empty-state">Les scénarios seront affichés après le chargement des données.</div>';
 
     const movements = prediction.movements || { available: false, up: [], down: [] };
     renderMovementList(movements.up || [], "#rank-up-movers", "up", movements.available);
@@ -443,6 +453,7 @@
           prediction.ranked = result.ranked;
           prediction.method = "Historique + météo + Lune + sismicité (expérimental)";
           prediction.alternatives = prediction.models.filter((item) => item.id !== "contextual").map((item) => item.numbers);
+          prediction.diverse_scenarios = result.diverse_scenarios || prediction.diverse_scenarios || [];
         } else {
           prediction.models = baseModels;
           prediction.numbers = baseModels.find((item) => item.id === "hybrid")?.numbers || prediction.numbers;

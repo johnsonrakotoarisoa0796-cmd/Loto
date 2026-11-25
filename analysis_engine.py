@@ -7,6 +7,9 @@ and evaluates that heuristic against the theoretical random baseline.
 from __future__ import annotations
 
 from collections import Counter
+import hashlib
+import json
+import random
 from itertools import combinations
 from math import comb, sqrt
 from datetime import date
@@ -150,6 +153,144 @@ def _number_scores(draws: Sequence[dict]) -> list[dict]:
 def _top_numbers(draws: Sequence[dict]) -> list[int]:
     scores = _number_scores(draws)
     return [row["number"] for row in sorted(scores, key=lambda x: (-x["score"], x["number"]))[:PICK_COUNT]]
+
+
+def build_diverse_scenarios(
+    ranked: Sequence[dict],
+    draws: Sequence[dict],
+    count: int = 3,
+    pool_size: int = 22,
+    max_shared: int = 2,
+) -> list[dict]:
+    """Build reproducible, score-weighted alternative combinations with overlap limits.
+
+    The primary deterministic ranking remains untouched. These scenarios are
+    exploratory diversification options, not independent prediction models
+    and not probability estimates. Identical history and scores yield identical
+    scenarios; a changed draw history or active ranking changes the seed.
+    """
+    if count <= 0 or len(ranked) < PICK_COUNT:
+        return []
+
+    ordered = sorted(
+        ranked,
+        key=lambda row: (-float(row.get("score", row.get("score_index", 0.0))), int(row["number"])),
+    )
+    pool = ordered[:max(PICK_COUNT, min(int(pool_size), N_NUMBERS, len(ordered)))]
+    if len(pool) < PICK_COUNT:
+        return []
+
+    numbers = [int(row["number"]) for row in pool]
+    score_values = [
+        max(0.0, float(row.get("score", row.get("score_index", 0.0))))
+        for row in pool
+    ]
+    max_score = max(score_values) if score_values else 1.0
+    base_weights = [
+        (1.0 / ((rank + 1) ** 0.70))
+        * (0.80 + 0.20 * (score / max_score if max_score > 0 else 0.0))
+        for rank, score in enumerate(score_values)
+    ]
+
+    cleaned = _clean_draws(draws)
+    seed_payload = {
+        "draws": [
+            [item["date"].isoformat(), list(item["numbers"])]
+            for item in cleaned
+        ],
+        "ranked": [
+            [int(row["number"]), round(float(row.get("score", row.get("score_index", 0.0))), 10)]
+            for row in ordered
+        ],
+        "generator": "diverse-scenarios-v1",
+    }
+    seed = int(hashlib.sha256(
+        json.dumps(seed_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest(), 16)
+    rng = random.Random(seed)
+
+    primary = {int(row["number"]) for row in ordered[:PICK_COUNT]}
+    previous: list[set[int]] = []
+    usage = Counter()
+    scenarios: list[dict] = []
+
+    def weighted_sample(weights: list[float]) -> list[int]:
+        available = list(range(len(numbers)))
+        current_weights = list(weights)
+        selected: list[int] = []
+        for _ in range(PICK_COUNT):
+            index = rng.choices(available, weights=current_weights, k=1)[0]
+            selected.append(numbers[index])
+            position = available.index(index)
+            available.pop(position)
+            current_weights.pop(position)
+        return sorted(selected)
+
+    for scenario_index in range(count):
+        best_combo: list[int] | None = None
+        best_key: tuple[float, ...] | None = None
+        chosen: list[int] | None = None
+        dynamic_weights = [
+            weight
+            * (0.65 ** usage[number])
+            * (0.72 if number in primary else 1.0)
+            for number, weight in zip(numbers, base_weights)
+        ]
+
+        # Rejection sampling maintains score weighting while enforcing a
+        # maximum overlap of two numbers with the main and previous scenarios.
+        for _ in range(1200):
+            candidate = weighted_sample(dynamic_weights)
+            candidate_set = set(candidate)
+            if any(candidate_set == prior for prior in previous):
+                continue
+            overlaps = [len(candidate_set & prior) for prior in [primary, *previous]]
+            mean_rank = sum(numbers.index(number) + 1 for number in candidate) / PICK_COUNT
+            key = (
+                float(max(overlaps, default=0)),
+                float(sum(overlaps)),
+                mean_rank,
+            )
+            if best_key is None or key < best_key:
+                best_key = key
+                best_combo = candidate
+            if all(overlap <= max_shared for overlap in overlaps):
+                chosen = candidate
+                break
+
+        if chosen is None:
+            # Keep output usable even for a pathological ranking; diagnostics
+            # will make any relaxed overlap visible to the UI.
+            chosen = best_combo or sorted(numbers[:PICK_COUNT])
+
+        chosen_set = set(chosen)
+        overlap_primary = len(chosen_set & primary)
+        mean_rank = sum(numbers.index(number) + 1 for number in chosen) / PICK_COUNT
+        scenarios.append({
+            "id": f"diverse_{scenario_index + 1}",
+            "label": f"Scénario diversifié {scenario_index + 1}",
+            "numbers": chosen,
+            "overlap_with_primary": overlap_primary,
+            "mean_rank_in_pool": round(mean_rank, 1),
+            "candidate_pool_size": len(pool),
+            "max_allowed_overlap": max_shared,
+            "diversity_constraint_met": (
+                overlap_primary <= max_shared
+                and all(len(chosen_set & prior) <= max_shared for prior in previous)
+            ),
+            "description": (
+                "Sélection pondérée parmi les meilleurs rangs, avec limitation "
+                "des numéros déjà présents dans les autres combinaisons."
+            ),
+            "score_note": (
+                "Scénario exploratoire diversifié ; ce n'est ni un modèle validé "
+                "ni une probabilité de gain."
+            ),
+        })
+        previous.append(chosen_set)
+        usage.update(chosen)
+
+    return scenarios
 
 
 

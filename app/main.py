@@ -20,7 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from analysis_engine import analyze_draws
+from analysis_engine import analyze_draws, build_diverse_scenarios
 from scientific_engine import audit_draws
 from contextual_study import build_contextual_study
 from contextual_predictor import build_contextual_prediction
@@ -30,7 +30,7 @@ BASE_DIR = Path(__file__).resolve().parent
 APP_PASSWORD = os.getenv("APP_PASSWORD", "")
 SECRET_KEY = os.getenv("SECRET_KEY", "development-secret-change-before-deploy")
 
-app = FastAPI(title="Loto 5/35 Analytics", version="1.5.0")
+app = FastAPI(title="Loto 5/35 Analytics", version="1.5.1")
 app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
@@ -308,7 +308,16 @@ def delete_draw(draw_id: int, db: Session = Depends(get_db)):
 
 @app.get("/api/analysis", dependencies=[Depends(require_auth)])
 def get_analysis(db: Session = Depends(get_db)):
-    return analyze_draws(load_draws(db))
+    draws = load_draws(db)
+    analysis = analyze_draws(draws)
+    analysis["prediction"]["diverse_scenarios"] = build_diverse_scenarios(
+        analysis["prediction"].get("ranked", []),
+        draws,
+        count=3,
+        pool_size=22,
+        max_shared=2,
+    )
+    return analysis
 
 
 def _apply_contextual_model(
@@ -360,7 +369,15 @@ def _effective_prediction(draws: list[dict]) -> dict:
             "reason": "Le calcul contextuel est momentanément indisponible ; le classement historique est conservé.",
             "detail": type(exc).__name__,
         }
-    return _apply_contextual_model(analysis, contextual)["prediction"]
+    prediction = _apply_contextual_model(analysis, contextual)["prediction"]
+    prediction["diverse_scenarios"] = build_diverse_scenarios(
+        prediction.get("ranked", []),
+        draws,
+        count=3,
+        pool_size=22,
+        max_shared=2,
+    )
+    return prediction
 
 
 @app.get("/api/predictions", dependencies=[Depends(require_auth)])
@@ -552,6 +569,16 @@ def get_contextual_study(db: Session = Depends(get_db)):
 def get_contextual_prediction(refresh: bool = False, db: Session = Depends(get_db)):
     """Return an experimental next-draw ranking using pre-draw external context."""
     try:
-        return build_contextual_prediction(load_draws(db), force_refresh=refresh)
+        draws = load_draws(db)
+        result = build_contextual_prediction(draws, force_refresh=refresh)
+        if result.get("ready"):
+            result["diverse_scenarios"] = build_diverse_scenarios(
+                result.get("ranked", []),
+                draws,
+                count=3,
+                pool_size=22,
+                max_shared=2,
+            )
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
