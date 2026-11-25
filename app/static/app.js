@@ -66,10 +66,10 @@
     const { summary, frequencies, transitions } = state.analysis;
     $("#kpi-draws").textContent = numberFmt.format(summary.draw_count);
     $("#kpi-latest").textContent = summary.latest_date ? formatDate(summary.latest_date, { day: "2-digit", month: "short" }) : "—";
-    $("#kpi-repeat").textContent = summary.daily_transition_count ? pct(summary.daily_repeat_rate) : "—";
-    $("#kpi-repeat-foot").textContent = summary.daily_transition_count
-      ? `${summary.daily_repeat_count}/${summary.daily_transition_count} transitions · Théorie : 56,1 %`
-      : "Enregistre deux jours consécutifs pour comparer";
+    $("#kpi-repeat").textContent = summary.successive_transition_count ? pct(summary.successive_repeat_rate) : "—";
+    $("#kpi-repeat-foot").textContent = summary.successive_transition_count
+      ? `${summary.successive_repeat_count}/${summary.successive_transition_count} paires de tirages · Théorie : 56,1 %`
+      : "Enregistre au moins deux tirages pour comparer";
     $("#kpi-unique").innerHTML = `${summary.unique_numbers_seen}<small>/35</small>`;
     $("#nav-draw-count").textContent = summary.draw_count;
     $("#today-label").textContent = summary.latest_date ? `DERNIÈRE MISE À JOUR · ${formatDate(summary.latest_date).toUpperCase()}` : "HISTORIQUE 5/35";
