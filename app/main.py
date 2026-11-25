@@ -308,7 +308,16 @@ def delete_draw(draw_id: int, db: Session = Depends(get_db)):
 
 @app.get("/api/analysis", dependencies=[Depends(require_auth)])
 def get_analysis(db: Session = Depends(get_db)):
-    return analyze_draws(load_draws(db))
+    draws = load_draws(db)
+    analysis = analyze_draws(draws)
+    analysis["prediction"]["diverse_scenarios"] = build_diverse_scenarios(
+        analysis["prediction"].get("ranked", []),
+        draws,
+        count=3,
+        pool_size=22,
+        max_shared=2,
+    )
+    return analysis
 
 
 def _apply_contextual_model(
@@ -560,6 +569,16 @@ def get_contextual_study(db: Session = Depends(get_db)):
 def get_contextual_prediction(refresh: bool = False, db: Session = Depends(get_db)):
     """Return an experimental next-draw ranking using pre-draw external context."""
     try:
-        return build_contextual_prediction(load_draws(db), force_refresh=refresh)
+        draws = load_draws(db)
+        result = build_contextual_prediction(draws, force_refresh=refresh)
+        if result.get("ready"):
+            result["diverse_scenarios"] = build_diverse_scenarios(
+                result.get("ranked", []),
+                draws,
+                count=3,
+                pool_size=22,
+                max_shared=2,
+            )
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
