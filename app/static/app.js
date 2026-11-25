@@ -246,7 +246,7 @@
       const formatPValue = (value) => {
         const parsed = Number(value);
         if (!Number.isFinite(parsed)) return "—";
-        return parsed < 0.001 ? "< 0,001" : parsed.toLocaleString("fr-FR", { maximumFractionDigits: 3 });
+        return parsed < 0.001 ? "&lt; 0,001" : parsed.toLocaleString("fr-FR", { maximumFractionDigits: 3 });
       };
       const methodRows = comparison.methods.map((model) => {
         const difference = model.difference;
