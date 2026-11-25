@@ -12,6 +12,8 @@ from math import comb, sqrt
 from datetime import date
 from typing import Iterable, Sequence
 
+from scientific_engine import _forecast_hits_test, _holm_adjust
+
 N_NUMBERS = 35
 PICK_COUNT = 5
 BASE_RATE = PICK_COUNT / N_NUMBERS
@@ -262,7 +264,7 @@ def _backtest_methods(
     draws: Sequence[dict],
     min_training: int = BACKTEST_MIN_TRAINING_DRAWS,
 ) -> dict:
-    """Walk-forward comparison: each model sees only draws before the forecast."""
+    """Walk-forward comparison with exact random-null tests and Holm correction."""
     observations: dict[str, list[int]] = {
         definition["id"]: [] for definition in MODEL_DEFINITIONS
     }
@@ -280,6 +282,9 @@ def _backtest_methods(
             "training_draws": min_training,
             "tested_draws": 0,
             "expected_hits": expected_overlap(),
+            "minimum_confirmation_forecasts": 80,
+            "confirmation_ready": False,
+            "candidate_edge": False,
             "methods": [],
             "reason": (
                 f"Il faut au moins {min_training + 1} tirages pour commencer "
@@ -287,44 +292,118 @@ def _backtest_methods(
             ),
         }
 
+    confirmation_ready = tested_draws >= 80
+    split = tested_draws // 2
     methods = []
+    test_entries = []
+
     for definition in MODEL_DEFINITIONS:
         values = observations[definition["id"]]
-        average = sum(values) / len(values)
-        difference = average - expected_overlap()
-        if tested_draws < 20:
-            sample_level = "short"
-            note = "Échantillon très court : résultat purement descriptif."
-        elif tested_draws < 40:
-            sample_level = "exploratory"
-            note = "Comparaison exploratoire ; pas de preuve d'un avantage prédictif."
-        else:
-            sample_level = "monitoring"
-            note = "Suivi hors échantillon ; une différence passée ne garantit pas la suite."
-        methods.append({
+        overall = _forecast_hits_test(values)
+        method = {
             "id": definition["id"],
             "label": definition["label"],
             "tested_draws": len(values),
-            "average_hits": average,
-            "expected_hits": expected_overlap(),
-            "difference": difference,
-            "sample_level": sample_level,
-            "note": note,
+            "total_hits": overall["total_hits"],
+            "average_hits": overall["mean_hits"],
+            "expected_hits": overall["expected_hits"],
+            "difference": overall["difference"],
+            "p_value_upper": overall["p_value_upper"],
+            "p_value_method": overall["p_value_method"],
+            "sample_level": (
+                "short" if tested_draws < 20
+                else "exploratory" if tested_draws < 40
+                else "monitoring"
+            ),
+            "note": (
+                "Échantillon très court : résultat purement descriptif."
+                if tested_draws < 20 else
+                "Comparaison exploratoire ; pas de preuve d'un avantage prédictif."
+                if tested_draws < 40 else
+                "Suivi hors échantillon ; attendre deux périodes de 40 prévisions pour confirmer."
+            ),
             "hit_distribution": [
                 {"hits": hits, "count": values.count(hits)}
                 for hits in range(PICK_COUNT + 1)
             ],
-        })
+            "first_period": None,
+            "confirmation_period": None,
+            "confirmed_candidate": False,
+        }
+        overall_entry = {
+            "kind": "model_overall",
+            "model_id": definition["id"],
+            "p_value": overall["p_value_upper"] if overall["p_value_upper"] is not None else 1.0,
+        }
+        test_entries.append(overall_entry)
+        method["_overall_test_entry"] = overall_entry
+
+        if confirmation_ready:
+            first = _forecast_hits_test(values[:split])
+            second = _forecast_hits_test(values[split:])
+            for key, label, result in (
+                ("first_period", "first_period", first),
+                ("confirmation_period", "confirmation_period", second),
+            ):
+                entry = {
+                    "kind": label,
+                    "model_id": definition["id"],
+                    "p_value": result["p_value_upper"] if result["p_value_upper"] is not None else 1.0,
+                }
+                test_entries.append(entry)
+                method[key] = {
+                    **result,
+                    "_test_entry": entry,
+                }
+        methods.append(method)
+
+    # One family-wide Holm correction covers the three overall model tests,
+    # and (when available) both confirmation-period tests for every model.
+    _holm_adjust(test_entries)
+    candidate_models = []
+    for method in methods:
+        method["p_value_adjusted_holm"] = method.pop("_overall_test_entry")["p_adjusted"]
+        if confirmation_ready:
+            first = method["first_period"]
+            second = method["confirmation_period"]
+            first_entry = first.pop("_test_entry")
+            second_entry = second.pop("_test_entry")
+            first["p_value_adjusted_holm"] = first_entry["p_adjusted"]
+            second["p_value_adjusted_holm"] = second_entry["p_adjusted"]
+            method["confirmed_candidate"] = bool(
+                method["difference"] > 0
+                and first["difference"] > 0
+                and second["difference"] > 0
+                and method["p_value_adjusted_holm"] < 0.01
+                and first["p_value_adjusted_holm"] < 0.05
+                and second["p_value_adjusted_holm"] < 0.05
+            )
+        if method["confirmed_candidate"]:
+            candidate_models.append(method["id"])
 
     return {
         "available": True,
         "training_draws": min_training,
         "tested_draws": tested_draws,
         "expected_hits": expected_overlap(),
+        "minimum_confirmation_forecasts": 80,
+        "confirmation_ready": confirmation_ready,
+        "candidate_edge": bool(candidate_models),
+        "candidate_models": candidate_models,
         "methods": methods,
         "methodology": (
-            "Validation chronologique : chaque méthode est recalculée avec le passé "
-            "uniquement, puis comparée au tirage suivant."
+            "Validation chronologique sans fuite : chaque classement est établi avant le tirage évalué. "
+            "Le nombre total de numéros touchés est comparé à la distribution exacte des recouvrements "
+            "entre deux combinaisons 5/35 indépendantes. Les p-values sont corrigées par Holm sur les trois "
+            "méthodes ; après 80 prévisions, la correction inclut aussi deux périodes de confirmation de "
+            "40 prévisions chacune."
+        ),
+        "confirmation_note": (
+            "Deux périodes de 40 prévisions sont disponibles. Un candidat exige un écart positif dans "
+            "les deux périodes, p-Holm inférieur à 1 % au total et inférieur à 5 % dans chaque période."
+            if confirmation_ready else
+            f"Pas de conclusion robuste avant {80} prévisions hors échantillon ; "
+            f"{tested_draws} seulement sont actuellement disponibles."
         ),
     }
 
