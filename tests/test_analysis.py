@@ -131,3 +131,41 @@ def test_methods_backtest_waits_until_one_draw_after_training():
     assert comparison["available"] is False
     assert comparison["tested_draws"] == 0
     assert "31" in comparison["reason"]
+
+
+
+def test_backtest_reports_exact_holm_adjusted_p_values_and_waits_for_confirmation():
+    rows = [[1, 2, 3, 4, 5] for _ in range(120)]
+    result = analyze_draws(as_dict([
+        (date(2026, 1, 1) + timedelta(days=i), row)
+        for i, row in enumerate(rows)
+    ]))
+    comparison = result["backtest"]["methods_comparison"]
+
+    assert comparison["tested_draws"] == 90
+    assert comparison["confirmation_ready"] is True
+    assert comparison["candidate_edge"] is True
+    assert comparison["minimum_confirmation_forecasts"] == 80
+    for model in comparison["methods"]:
+        assert model["total_hits"] == 450
+        assert model["p_value_method"] == "convolution exacte"
+        assert 0 <= model["p_value_upper"] <= 1
+        assert model["p_value_adjusted_holm"] >= model["p_value_upper"]
+        assert model["confirmed_candidate"] is True
+        assert model["first_period"]["tested_draws"] == 45
+        assert model["confirmation_period"]["tested_draws"] == 45
+
+
+def test_short_walk_forward_sample_never_qualifies_as_confirmed_candidate():
+    rows = [[1, 2, 3, 4, 5] for _ in range(47)]
+    result = analyze_draws(as_dict([
+        (date(2026, 1, 1) + timedelta(days=i), row)
+        for i, row in enumerate(rows)
+    ]))
+    comparison = result["backtest"]["methods_comparison"]
+
+    assert comparison["tested_draws"] == 17
+    assert comparison["confirmation_ready"] is False
+    assert comparison["candidate_edge"] is False
+    assert all(model["confirmed_candidate"] is False for model in comparison["methods"])
+    assert all(model["p_value_adjusted_holm"] >= model["p_value_upper"] for model in comparison["methods"])
