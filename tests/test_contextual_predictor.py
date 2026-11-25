@@ -108,3 +108,24 @@ def test_context_backtest_compares_contextual_model_and_historical_baseline():
     assert result["expected_hits"] == pytest.approx(25 / 35)
     assert result["sample_level"] == "short"
 
+
+
+
+def test_context_backtest_reports_random_and_paired_significance():
+    draws, contexts = _rows(42)
+    result = predictor._context_backtest(draws, contexts, 200.0)
+
+    assert result["tested_draws"] == 12
+    assert result["confirmation_ready"] is False
+    assert result["candidate_edge"] is False
+    assert result["paired_wins"] + result["paired_losses"] + result["paired_ties"] == 12
+    assert 0 <= result["contextual_p_value_vs_random"] <= 1
+    assert result["contextual_p_value_vs_random_holm"] >= result["contextual_p_value_vs_random"]
+    assert 0 <= result["paired_sign_p_value"] <= 1
+    assert result["paired_sign_p_value_holm"] >= result["paired_sign_p_value"]
+
+
+def test_paired_sign_test_handles_wins_losses_and_ties():
+    assert predictor._paired_sign_test_p_value(3, 0) == pytest.approx(0.125)
+    assert predictor._paired_sign_test_p_value(0, 3) == pytest.approx(1.0)
+    assert predictor._paired_sign_test_p_value(0, 0) == pytest.approx(1.0)
