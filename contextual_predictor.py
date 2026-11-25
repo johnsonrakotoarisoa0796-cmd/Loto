@@ -18,6 +18,7 @@ from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
 from analysis_engine import BASE_RATE, N_NUMBERS, PICK_COUNT, _clean_draws, _number_scores
+from scientific_engine import _forecast_hits_test, _holm_adjust
 from contextual_study import (
     DEFAULT_DRAW_TIMEZONE,
     ZODIAC_SIGNS,
@@ -290,6 +291,17 @@ def _upcoming_draw_date(
     return max(candidate, latest_date + timedelta(days=1))
 
 
+def _paired_sign_test_p_value(wins: int, losses: int) -> float:
+    """Exact one-sided sign test for paired contextual-vs-baseline hit counts."""
+    non_ties = wins + losses
+    if non_ties == 0:
+        return 1.0
+    return min(
+        1.0,
+        sum(math.comb(non_ties, k) * (0.5 ** non_ties) for k in range(wins, non_ties + 1)),
+    )
+
+
 def _context_backtest(
     draws: list[dict[str, Any]],
     context_rows: list[dict[str, Any]],
@@ -336,34 +348,126 @@ def _context_backtest(
             "tested_draws": 0,
             "skipped_draws": skipped,
             "expected_hits": PICK_COUNT * PICK_COUNT / N_NUMBERS,
+            "confirmation_ready": False,
+            "candidate_edge": False,
             "reason": "Le backtest contextuel commencera dès que les historiques et prévisions météo passés seront suffisamment complets.",
         }
+
+    context_stats = _forecast_hits_test(context_hits)
+    baseline_stats = _forecast_hits_test(baseline_hits)
+    wins = sum(context > baseline for context, baseline in zip(context_hits, baseline_hits))
+    losses = sum(context < baseline for context, baseline in zip(context_hits, baseline_hits))
+    ties = tested - wins - losses
+    paired_p = _paired_sign_test_p_value(wins, losses)
+
+    confirmation_ready = tested >= 80
+    split = tested // 2
+    test_entries = [
+        {"kind": "context_vs_random", "p_value": context_stats["p_value_upper"] or 1.0},
+        {"kind": "baseline_vs_random", "p_value": baseline_stats["p_value_upper"] or 1.0},
+        {"kind": "context_vs_baseline", "p_value": paired_p},
+    ]
+    first_context_stats = second_context_stats = None
+    first_paired = second_paired = None
+    if confirmation_ready:
+        first_context = context_hits[:split]
+        second_context = context_hits[split:]
+        first_baseline = baseline_hits[:split]
+        second_baseline = baseline_hits[split:]
+        first_context_stats = _forecast_hits_test(first_context)
+        second_context_stats = _forecast_hits_test(second_context)
+        first_wins = sum(a > b for a, b in zip(first_context, first_baseline))
+        first_losses = sum(a < b for a, b in zip(first_context, first_baseline))
+        second_wins = sum(a > b for a, b in zip(second_context, second_baseline))
+        second_losses = sum(a < b for a, b in zip(second_context, second_baseline))
+        first_paired = _paired_sign_test_p_value(first_wins, first_losses)
+        second_paired = _paired_sign_test_p_value(second_wins, second_losses)
+        test_entries.extend([
+            {"kind": "first_context_vs_random", "p_value": first_context_stats["p_value_upper"] or 1.0},
+            {"kind": "first_context_vs_baseline", "p_value": first_paired},
+            {"kind": "second_context_vs_random", "p_value": second_context_stats["p_value_upper"] or 1.0},
+            {"kind": "second_context_vs_baseline", "p_value": second_paired},
+        ])
+
+    _holm_adjust(test_entries)
+    adjusted = {item["kind"]: item["p_adjusted"] for item in test_entries}
     level = "short" if tested < 20 else "exploratory" if tested < 40 else "monitoring"
+    difference = (sum(context_hits) - sum(baseline_hits)) / tested
+
+    candidate_edge = bool(
+        confirmation_ready
+        and difference > 0
+        and adjusted["context_vs_random"] < 0.01
+        and adjusted["context_vs_baseline"] < 0.01
+        and first_context_stats is not None
+        and second_context_stats is not None
+        and sum(context_hits[:split]) > sum(baseline_hits[:split])
+        and sum(context_hits[split:]) > sum(baseline_hits[split:])
+        and adjusted["first_context_vs_random"] < 0.05
+        and adjusted["first_context_vs_baseline"] < 0.05
+        and adjusted["second_context_vs_random"] < 0.05
+        and adjusted["second_context_vs_baseline"] < 0.05
+    )
+
     return {
         "available": True,
         "tested_draws": tested,
         "skipped_draws": skipped,
-        "contextual_average_hits": sum(context_hits) / tested,
-        "baseline_average_hits": sum(baseline_hits) / tested,
+        "contextual_total_hits": context_stats["total_hits"],
+        "baseline_total_hits": baseline_stats["total_hits"],
+        "contextual_average_hits": context_stats["mean_hits"],
+        "baseline_average_hits": baseline_stats["mean_hits"],
         "expected_hits": PICK_COUNT * PICK_COUNT / N_NUMBERS,
-        "difference_vs_baseline": (sum(context_hits) - sum(baseline_hits)) / tested,
+        "difference_vs_baseline": difference,
+        "contextual_p_value_vs_random": context_stats["p_value_upper"],
+        "contextual_p_value_vs_random_holm": adjusted["context_vs_random"],
+        "baseline_p_value_vs_random": baseline_stats["p_value_upper"],
+        "baseline_p_value_vs_random_holm": adjusted["baseline_vs_random"],
+        "paired_sign_p_value": paired_p,
+        "paired_sign_p_value_holm": adjusted["context_vs_baseline"],
+        "paired_wins": wins,
+        "paired_losses": losses,
+        "paired_ties": ties,
+        "confirmation_ready": confirmation_ready,
+        "minimum_confirmation_forecasts": 80,
+        "candidate_edge": candidate_edge,
+        "first_period": (
+            {
+                "tested_draws": len(context_hits[:split]),
+                "contextual_average_hits": first_context_stats["mean_hits"],
+                "baseline_average_hits": sum(baseline_hits[:split]) / len(baseline_hits[:split]),
+                "contextual_p_value_holm": adjusted["first_context_vs_random"],
+                "paired_sign_p_value_holm": adjusted["first_context_vs_baseline"],
+            } if confirmation_ready and first_context_stats else None
+        ),
+        "confirmation_period": (
+            {
+                "tested_draws": len(context_hits[split:]),
+                "contextual_average_hits": second_context_stats["mean_hits"],
+                "baseline_average_hits": sum(baseline_hits[split:]) / len(baseline_hits[split:]),
+                "contextual_p_value_holm": adjusted["second_context_vs_random"],
+                "paired_sign_p_value_holm": adjusted["second_context_vs_baseline"],
+            } if confirmation_ready and second_context_stats else None
+        ),
         "sample_level": level,
         "contextual_hit_distribution": [
             {"hits": value, "count": context_hits.count(value)}
             for value in range(PICK_COUNT + 1)
         ],
         "methodology": (
-            "Validation chronologique : le contexte de chaque date cible provient des prévisions "
-            "horaires à 16:00 et d'une fenêtre sismique de 24 heures se terminant au même délai "
-            "avant le cutoff 16:35 que le pronostic courant. "
-            "Les paramètres du modèle sont fixes ; l'ajustement contextuel est plafonné à 25 %."
+            "Validation chronologique sans fuite, comparaison des scores touchés à la loi exacte "
+            "du hasard 5/35, correction Holm des tests contextuel/historique et test exact des signes "
+            "sur les paires de prévisions. Une confirmation exige deux périodes de 40 prévisions."
         ),
         "warning": (
-            "Ce résultat ne démontre pas une capacité prédictive. Un échantillon de test court "
-            "doit être complété par des prévisions prospectives enregistrées avant les tirages."
+            "Un signal candidat n'est retenu qu'après au moins 80 prévisions hors échantillon, "
+            "avec avantage et tests corrigés positifs dans les deux périodes. Les scores restent "
+            "des indices, pas des probabilités de sortie."
+            if candidate_edge else
+            "Aucun avantage contextuel confirmé. Un petit échantillon ou une différence positive "
+            "ne démontre pas de capacité prédictive."
         ),
     }
-
 
 def _cache_key(
     draws: list[dict[str, Any]],
