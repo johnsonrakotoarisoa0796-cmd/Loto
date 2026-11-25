@@ -363,8 +363,8 @@ def _context_backtest(
     confirmation_ready = tested >= 80
     split = tested // 2
     test_entries = [
-        {"kind": "context_vs_random", "p_value": context_stats["p_value_upper"] or 1.0},
-        {"kind": "baseline_vs_random", "p_value": baseline_stats["p_value_upper"] or 1.0},
+        {"kind": "context_vs_random", "p_value": context_stats["p_value_upper"] if context_stats["p_value_upper"] is not None else 1.0},
+        {"kind": "baseline_vs_random", "p_value": baseline_stats["p_value_upper"] if baseline_stats["p_value_upper"] is not None else 1.0},
         {"kind": "context_vs_baseline", "p_value": paired_p},
     ]
     first_context_stats = second_context_stats = None
@@ -383,9 +383,9 @@ def _context_backtest(
         first_paired = _paired_sign_test_p_value(first_wins, first_losses)
         second_paired = _paired_sign_test_p_value(second_wins, second_losses)
         test_entries.extend([
-            {"kind": "first_context_vs_random", "p_value": first_context_stats["p_value_upper"] or 1.0},
+            {"kind": "first_context_vs_random", "p_value": first_context_stats["p_value_upper"] if first_context_stats["p_value_upper"] is not None else 1.0},
             {"kind": "first_context_vs_baseline", "p_value": first_paired},
-            {"kind": "second_context_vs_random", "p_value": second_context_stats["p_value_upper"] or 1.0},
+            {"kind": "second_context_vs_random", "p_value": second_context_stats["p_value_upper"] if second_context_stats["p_value_upper"] is not None else 1.0},
             {"kind": "second_context_vs_baseline", "p_value": second_paired},
         ])
 
