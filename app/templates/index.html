@@ -26,7 +26,7 @@
   <link rel="stylesheet" href="/static/style.css">
   <script>window.LOTO_CSRF = {{ csrf_token | tojson }};</script>
   <script src="/static/theme.js" defer></script>
-  <script src="/static/app.js?v=1.3.0" defer></script>
+  <script src="/static/app.js?v=1.4.1" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -52,7 +52,7 @@
         {% if password_protected %}
         <form method="post" action="/logout" id="logout-form"><input type="hidden" name="csrf" value=""><button class="logout-btn" type="button" id="logout-button">↪ Déconnexion</button></form>
         {% endif %}
-        <div class="version">LOTO LAB <span>·</span> 1.3.0</div>
+        <div class="version">LOTO LAB <span>·</span> 1.4.1</div>
       </div>
     </aside>
 
@@ -81,7 +81,7 @@
         <div class="stat-grid">
           <article class="stat-card"><div class="stat-top"><span>Tirages enregistrés</span><span class="stat-icon purple">▤</span></div><div class="stat-value" id="kpi-draws">—</div><div class="stat-foot">Dans ta base historique</div></article>
           <article class="stat-card"><div class="stat-top"><span>Dernier tirage</span><span class="stat-icon cyan">◷</span></div><div class="stat-value date-value" id="kpi-latest">—</div><div class="stat-foot">Date la plus récente</div></article>
-          <article class="stat-card"><div class="stat-top"><span>Répétition au tirage suivant</span><span class="stat-icon orange">↻</span></div><div class="stat-value" id="kpi-repeat">—</div><div class="stat-foot" id="kpi-repeat-foot">Référence théorique : 56,1 %</div></article>
+          <article class="stat-card"><div class="stat-top"><span>Répétition entre tirages successifs</span><span class="stat-icon orange">↻</span></div><div class="stat-value" id="kpi-repeat">—</div><div class="stat-foot" id="kpi-repeat-foot">Référence théorique : 56,1 %</div></article>
           <article class="stat-card"><div class="stat-top"><span>Numéros déjà observés</span><span class="stat-icon green">◉</span></div><div class="stat-value" id="kpi-unique">—<small>/35</small></div><div class="stat-foot">Numéros présents dans l'historique</div></article>
         </div>
 
