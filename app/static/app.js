@@ -243,23 +243,47 @@
     if (!comparison || !comparison.available) {
       $("#backtest-content").innerHTML = '<div class="backtest-message">' + escapeHtml((comparison && comparison.reason) || backtest.reason || "Le comparatif chronologique est indisponible.") + '</div>';
     } else {
+      const formatPValue = (value) => {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) return "—";
+        return parsed < 0.001 ? "< 0,001" : parsed.toLocaleString("fr-FR", { maximumFractionDigits: 3 });
+      };
       const methodRows = comparison.methods.map((model) => {
         const difference = model.difference;
         const direction = difference > 0.000001 ? "positive" : difference < -0.000001 ? "negative" : "neutral";
         const signed = (difference > 0 ? "+" : "") + difference.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+        const adjustedP = formatPValue(model.p_value_adjusted_holm);
+        const confirmation = model.confirmed_candidate ? "Candidat statistique" :
+          comparison.confirmation_ready ? "Non confirmé" : "À confirmer";
         return '<tr>' +
           '<td><strong>' + escapeHtml(model.label) + '</strong><small>' + escapeHtml(model.note) + '</small></td>' +
           '<td>' + model.tested_draws + '</td>' +
-          '<td><strong>' + model.average_hits.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' / 5</strong></td>' +
+          '<td><strong>' + model.average_hits.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' / 5</strong><small>' + (model.total_hits ?? "—") + ' touches cumulées</small></td>' +
           '<td>' + model.expected_hits.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' / 5</td>' +
           '<td class="backtest-' + direction + '">' + signed + '</td>' +
+          '<td>' + adjustedP + '</td>' +
+          '<td>' + confirmation + '</td>' +
         '</tr>';
       }).join("");
       const caveat = comparison.tested_draws < 20
-        ? "Le nombre de tests est encore très insuffisant pour conclure."
-        : comparison.tested_draws < 40
-          ? "Il faut davantage de prévisions indépendantes pour une évaluation plus informative."
-          : "Continuer le suivi prospectif avant toute conclusion.";
+        ? "Échantillon très court : lecture descriptive uniquement."
+        : comparison.tested_draws < 80
+          ? "Il faut au moins 80 prévisions hors échantillon pour vérifier deux périodes de confirmation de 40."
+          : comparison.candidate_edge
+            ? "Un candidat statistique satisfait les seuils de confirmation ; il doit encore être surveillé prospectivement."
+            : "Aucun modèle ne satisfait les critères de confirmation dans les deux périodes.";
+      const contextualBacktest = contextual && contextual.backtest;
+      const contextualDetail = contextualBacktest && contextualBacktest.available
+        ? '<p class="micro-note"><strong>Modèle contextuel :</strong> ' + contextualBacktest.tested_draws +
+          ' tests · ' + Number(contextualBacktest.contextual_average_hits).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) +
+          '/5 contre ' + Number(contextualBacktest.baseline_average_hits).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) +
+          '/5 pour l’historique · ' + contextualBacktest.paired_wins + ' victoires, ' + contextualBacktest.paired_losses +
+          ' défaites et ' + contextualBacktest.paired_ties + ' égalités · p-Holm vs hasard : ' +
+          formatPValue(contextualBacktest.contextual_p_value_vs_random_holm) +
+          ' · p-Holm du test apparié : ' + formatPValue(contextualBacktest.paired_sign_p_value_holm) +
+          '. ' + escapeHtml(contextualBacktest.warning || "") + '</p>'
+        : contextualBacktest && contextualBacktest.reason
+          ? '<p class="micro-note">Backtest contextuel : ' + escapeHtml(contextualBacktest.reason) + '</p>' : '';
       $("#backtest-content").innerHTML =
         '<div class="backtest-summary">' +
           '<span><strong>' + comparison.tested_draws + '</strong> prévision(s) hors échantillon par méthode</span>' +
@@ -267,19 +291,13 @@
           '<span>Référence aléatoire : ' + comparison.expected_hits.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' / 5</span>' +
         '</div>' +
         '<div class="table-scroll"><table class="model-comparison-table">' +
-          '<thead><tr><th>MÉTHODE</th><th>TESTS</th><th>MOYENNE OBSERVÉE</th><th>HASARD ATTENDU</th><th>ÉCART</th></tr></thead>' +
+          '<thead><tr><th>MÉTHODE</th><th>TESTS</th><th>MOYENNE OBSERVÉE</th><th>HASARD ATTENDU</th><th>ÉCART</th><th>P-HOLM</th><th>CONFIRMATION</th></tr></thead>' +
           '<tbody>' + methodRows + '</tbody>' +
         '</table></div>' +
-        '<p class="micro-note">' + escapeHtml(comparison.methodology || "") + ' Une différence positive sur un petit échantillon n’est pas une preuve d’avantage prédictif. ' + caveat + '</p>' +
-        (contextual && contextual.backtest && contextual.backtest.available
-          ? '<p class="micro-note"><strong>Modèle contextuel :</strong> ' + contextual.backtest.tested_draws +
-            ' tests chronologiques · moyenne ' + Number(contextual.backtest.contextual_average_hits).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) +
-            '/5 · modèle historique ' + Number(contextual.backtest.baseline_average_hits).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) +
-            '/5 · écart ' + (contextual.backtest.difference_vs_baseline > 0 ? "+" : "") +
-            Number(contextual.backtest.difference_vs_baseline).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) +
-            '/5. ' + escapeHtml(contextual.backtest.warning || "") + '</p>'
-          : contextual && contextual.backtest && contextual.backtest.reason
-            ? '<p class="micro-note">Backtest contextuel : ' + escapeHtml(contextual.backtest.reason) + '</p>' : '');
+        '<p class="micro-note">' + escapeHtml(comparison.methodology || "") +
+          ' P-Holm est la probabilité exacte d’obtenir au moins autant de touches sous le modèle aléatoire, après correction des comparaisons multiples. ' +
+          escapeHtml(comparison.confirmation_note || "") + ' ' + caveat + '</p>' +
+        contextualDetail;
     }
 
     const forecasts = state.forecastHistory;
