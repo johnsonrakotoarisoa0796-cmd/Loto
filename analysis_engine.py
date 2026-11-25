@@ -353,6 +353,7 @@ def _backtest_methods(
                 test_entries.append(entry)
                 method[key] = {
                     **result,
+                    "tested_draws": result["forecasts"],
                     "_test_entry": entry,
                 }
         methods.append(method)
