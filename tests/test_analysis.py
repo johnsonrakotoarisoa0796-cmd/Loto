@@ -76,7 +76,7 @@ def test_prediction_exposes_seven_distinct_candidate_models():
         assert all(1 <= number <= 35 for number in model["numbers"])
         assert model["score_index"] > 0
     assert result["prediction"]["numbers"] == models[0]["numbers"]
-    assert result["prediction"]["alternatives"] == [models[1]["numbers"], models[2]["numbers"]]
+    assert result["prediction"]["alternatives"] == [model["numbers"] for model in models[1:]]
 
 
 def test_recent_and_global_frequency_methods_can_react_differently():
