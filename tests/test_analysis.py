@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from analysis_engine import analyze_draws, expected_overlap, theoretical_overlap_probability
+from analysis_engine import analyze_draws, build_diverse_scenarios, expected_overlap, theoretical_overlap_probability
 
 
 SAMPLE = [
@@ -169,3 +169,43 @@ def test_short_walk_forward_sample_never_qualifies_as_confirmed_candidate():
     assert comparison["candidate_edge"] is False
     assert all(model["confirmed_candidate"] is False for model in comparison["methods"])
     assert all(model["p_value_adjusted_holm"] >= model["p_value_upper"] for model in comparison["methods"])
+
+
+def test_diverse_scenarios_are_reproducible_and_respect_overlap_limits():
+    draws = as_dict()
+    ranked = analyze_draws(draws)["prediction"]["ranked"]
+
+    first = build_diverse_scenarios(ranked, draws)
+    second = build_diverse_scenarios(ranked, draws)
+
+    assert len(first) == 3
+    assert first == second
+    assert all(len(row["numbers"]) == 5 for row in first)
+    assert all(len(set(row["numbers"])) == 5 for row in first)
+    assert all(all(1 <= number <= 35 for number in row["numbers"]) for row in first)
+
+    primary = {row["number"] for row in ranked[:5]}
+    scenario_sets = [set(row["numbers"]) for row in first]
+    assert all(len(values & primary) <= 2 for values in scenario_sets)
+    assert all(
+        len(scenario_sets[left] & scenario_sets[right]) <= 2
+        for left in range(len(scenario_sets))
+        for right in range(left + 1, len(scenario_sets))
+    )
+    assert all(row["diversity_constraint_met"] for row in first)
+
+
+def test_diverse_scenarios_do_not_replace_the_main_ranked_combination():
+    draws = as_dict()
+    result = analyze_draws(draws)
+    main_combo = result["prediction"]["numbers"]
+    scenarios = build_diverse_scenarios(result["prediction"]["ranked"], draws)
+
+    assert main_combo == [row["number"] for row in result["prediction"]["ranked"][:5]]
+    assert all(row["numbers"] != main_combo for row in scenarios)
+
+
+def test_diverse_scenarios_can_be_disabled_with_zero_count():
+    draws = as_dict()
+    ranked = analyze_draws(draws)["prediction"]["ranked"]
+    assert build_diverse_scenarios(ranked, draws, count=0) == []
