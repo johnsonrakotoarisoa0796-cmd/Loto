@@ -16,6 +16,7 @@ from datetime import date
 from typing import Iterable, Sequence
 
 from scientific_engine import _forecast_hits_test, _holm_adjust
+from advanced_models import METHOD_DEFINITIONS as ADVANCED_METHOD_DEFINITIONS, build_advanced_rankings
 
 N_NUMBERS = 35
 PICK_COUNT = 5
@@ -311,6 +312,7 @@ MODEL_DEFINITIONS = (
         "description": "Donne plus de poids aux tirages récents avec une demi-vie fixe de 2 tirages.",
     },
 )
+MODEL_DEFINITIONS = MODEL_DEFINITIONS + ADVANCED_METHOD_DEFINITIONS
 RECENT_MODEL_HALF_LIFE = 2.0
 RECENT_MODEL_PRIOR = 8.0
 BACKTEST_MIN_TRAINING_DRAWS = 30
@@ -349,7 +351,7 @@ def _method_rankings(
         "recent": recent_scores,
     }
     results = []
-    for definition in MODEL_DEFINITIONS:
+    for definition in MODEL_DEFINITIONS[:3]:
         scores = score_maps[definition["id"]]
         ranked = sorted(
             (
@@ -363,6 +365,7 @@ def _method_rankings(
             key=lambda row: (-row["score"], row["number"]),
         )
         results.append({**definition, "ranked": ranked})
+    results.extend(build_advanced_rankings(draws))
     return results
 
 
@@ -429,7 +432,7 @@ def _backtest_methods(
             "methods": [],
             "reason": (
                 f"Il faut au moins {min_training + 1} tirages pour commencer "
-                "la comparaison chronologique des trois méthodes."
+                "la comparaison chronologique des sept méthodes."
             ),
         }
 
@@ -686,7 +689,9 @@ def analyze_draws(raw_draws: Iterable[dict]) -> dict:
             "description": model["description"],
             "numbers": [row["number"] for row in top_rows],
             "score_index": sum(row["score_index"] for row in top_rows) / PICK_COUNT,
-            "score_note": "Indice relatif, base 100 ; ce n'est pas une probabilité.",
+            "score_note": model.get("score_note", "Indice relatif, base 100 ; ce n'est pas une probabilité."),
+            "ready": model.get("ready", total >= BACKTEST_MIN_TRAINING_DRAWS),
+            "diagnostics": model.get("diagnostics"),
         })
     suggested = models[0]["numbers"]
     alternatives = [model["numbers"] for model in models[1:]]

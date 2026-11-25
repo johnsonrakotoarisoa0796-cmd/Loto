@@ -66,17 +66,17 @@ def test_invalid_draw_is_rejected():
 
 
 
-def test_prediction_exposes_three_fixed_and_distinct_models():
+def test_prediction_exposes_seven_distinct_candidate_models():
     result = analyze_draws(as_dict())
     models = result["prediction"]["models"]
-    assert [model["id"] for model in models] == ["hybrid", "frequency", "recent"]
+    assert [model["id"] for model in models] == ["hybrid", "frequency", "recent", "gap_hazard", "markov", "pair_transition", "multi_window"]
     for model in models:
         assert len(model["numbers"]) == 5
         assert len(set(model["numbers"])) == 5
         assert all(1 <= number <= 35 for number in model["numbers"])
         assert model["score_index"] > 0
     assert result["prediction"]["numbers"] == models[0]["numbers"]
-    assert result["prediction"]["alternatives"] == [models[1]["numbers"], models[2]["numbers"]]
+    assert result["prediction"]["alternatives"] == [model["numbers"] for model in models[1:]]
 
 
 def test_recent_and_global_frequency_methods_can_react_differently():
@@ -116,7 +116,7 @@ def test_methods_backtest_is_walk_forward_and_reports_random_baseline():
     assert comparison["training_draws"] == 30
     assert comparison["tested_draws"] == 10
     assert comparison["expected_hits"] == pytest.approx(25 / 35)
-    assert [row["id"] for row in comparison["methods"]] == ["hybrid", "frequency", "recent"]
+    assert [row["id"] for row in comparison["methods"]] == ["hybrid", "frequency", "recent", "gap_hazard", "markov", "pair_transition", "multi_window"]
     assert all(row["tested_draws"] == 10 for row in comparison["methods"])
     assert all(row["sample_level"] == "short" for row in comparison["methods"])
 
